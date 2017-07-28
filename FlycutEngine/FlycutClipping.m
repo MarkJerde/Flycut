@@ -124,7 +124,7 @@
     [old release];
 }
 
--(void) setTimestamp:(NSString *)newTimestamp
+-(void) setTimestamp:(int)newTimestamp
 {
     clipTimestamp = newTimestamp;
 }
