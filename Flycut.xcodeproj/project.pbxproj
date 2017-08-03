@@ -158,7 +158,7 @@
 		77DA6B911CB9549B0077917F /* FlycutClipping.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = FlycutClipping.h; path = FlycutEngine/FlycutClipping.h; sourceTree = SOURCE_ROOT; };
 		8D0C119E1F147E250046FAA0 /* FlycutOperator.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = FlycutOperator.m; sourceTree = "<group>"; };
 		8D0C11A01F147E3C0046FAA0 /* FlycutOperator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FlycutOperator.h; sourceTree = "<group>"; };
-		8D0C11A51F171B140046FAA0 /* Flycut-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flycut-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D0C11A51F171B140046FAA0 /* Flycut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Flycut.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D0C11A71F171B140046FAA0 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		8D0C11A91F171B140046FAA0 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		8D0C11AC1F171B140046FAA0 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -260,7 +260,7 @@
 			isa = PBXGroup;
 			children = (
 				8D1107320486CEB800E47090 /* Flycut.app */,
-				8D0C11A51F171B140046FAA0 /* Flycut-iOS.app */,
+				8D0C11A51F171B140046FAA0 /* Flycut.app */,
 				8D0C11B81F171B140046FAA0 /* Flycut-iOSTests.xctest */,
 				8D0C11C31F171B140046FAA0 /* Flycut-iOSUITests.xctest */,
 			);
@@ -488,7 +488,7 @@
 			);
 			name = "Flycut-iOS";
 			productName = "Flycut-iOS";
-			productReference = 8D0C11A51F171B140046FAA0 /* Flycut-iOS.app */;
+			productReference = 8D0C11A51F171B140046FAA0 /* Flycut.app */;
 			productType = "com.apple.product-type.application";
 		};
 		8D0C11B71F171B140046FAA0 /* Flycut-iOSTests */ = {
@@ -843,7 +843,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mark-a-jerde.Flycut-iOS";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Flycut;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OBJC_BRIDGING_HEADER = "Flycut-iOS-Bridging-Header.h";
@@ -896,7 +896,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mark-a-jerde.Flycut-iOS";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Flycut;
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_BRIDGING_HEADER = "Flycut-iOS-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
