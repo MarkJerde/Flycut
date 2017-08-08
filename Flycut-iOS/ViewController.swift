@@ -8,16 +8,19 @@
 
 import UIKit
 
-class ViewController: UITableViewController {
+class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSource {
 
 	let flycut:FlycutOperator = FlycutOperator()
 	var adjustQuantity:Int = 0
+	var tableView:UITableView!
 
 	override func viewDidLoad() {
 		super.viewDidLoad()
 		// Do any additional setup after loading the view, typically from a nib.
 
-		self.tableView.delegate = self
+		tableView = self.view.subviews.first as! UITableView
+		tableView.delegate = self
+		tableView.dataSource = self
 
 		flycut.awakeFromNib()
 
@@ -79,15 +82,15 @@ class ViewController: UITableViewController {
 		// Dispose of any resources that can be recreated.
 	}
 
-	override func numberOfSections(in tableView: UITableView) -> Int {
+	func numberOfSections(in tableView: UITableView) -> Int {
 		return 1
 	}
 
-	override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+	func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
 		return Int(flycut.jcListCount()) + adjustQuantity
 	}
 
-	override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+	func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
 		//let cell: UITableViewCell = tableView.dequeueReusableCell(withIdentifier: "UITableViewCell", for: indexPath)
 
 		let item = UITableViewCell();
@@ -98,14 +101,14 @@ class ViewController: UITableViewController {
 		return item
 	}
 
-	override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+	func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
 		let content = flycut.clippingString(withCount: Int32(indexPath.row) )
 		print("Select: \(indexPath.row) \(content) OK")
 		tableView.deselectRow(at: indexPath, animated: true)
 		UIPasteboard.general.string = content
 	}
 
-	override func tableView(_ tableView: UITableView, editActionsForRowAt indexPath: IndexPath) -> [UITableViewRowAction]? {
+	func tableView(_ tableView: UITableView, editActionsForRowAt indexPath: IndexPath) -> [UITableViewRowAction]? {
 		let deleteAction:UITableViewRowAction = UITableViewRowAction(style: .destructive, title: "Delete") { (rowAction, indexPath) in
 			self.flycut.setStackPositionTo( Int32(indexPath.row ))
 			self.flycut.clearItemAtStackPosition()
