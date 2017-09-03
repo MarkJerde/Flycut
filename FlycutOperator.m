@@ -14,11 +14,13 @@
 
 #import <Foundation/Foundation.h>
 #import "FlycutOperator.h"
+#import "MJCloudKitUserDefaultsSync.h"
 
 @implementation FlycutOperator
 
 - (id)init
 {
+	[MJCloudKitUserDefaultsSync startWithPrefix:@""];
 	[[NSUserDefaults standardUserDefaults] registerDefaults:[NSDictionary dictionaryWithObjectsAndKeys:
 		[NSNumber numberWithInt:40],
 		@"rememberNum",
