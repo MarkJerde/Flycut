@@ -72,13 +72,13 @@
 		8D11072D0486CEB800E47090 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; settings = {ATTRIBUTES = (); }; };
 		8D11072F0486CEB800E47090 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
 		8D153A0B1F54CD0C006A5815 /* MJCloudKitUserDefaultsSync.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D153A081F54CCF7006A5815 /* MJCloudKitUserDefaultsSync.m */; };
-		8D153A0E1F5BB24D006A5815 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8D153A0D1F5BB24D006A5815 /* CloudKit.framework */; };
 		8D1817F71F72D35400F80B7A /* MJCloudKitUserDefaultsSync.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D153A081F54CCF7006A5815 /* MJCloudKitUserDefaultsSync.m */; };
 		8D2E28861B0669F500AE62C8 /* com.generalarcade.flycut.black.16.png in Resources */ = {isa = PBXBuildFile; fileRef = 8D2E28821B0669F500AE62C8 /* com.generalarcade.flycut.black.16.png */; };
 		8D2E28871B0669F500AE62C8 /* com.generalarcade.flycut.black.32.png in Resources */ = {isa = PBXBuildFile; fileRef = 8D2E28831B0669F500AE62C8 /* com.generalarcade.flycut.black.32.png */; };
 		8D2E28881B0669F500AE62C8 /* com.generalarcade.flycut.xout.16.png in Resources */ = {isa = PBXBuildFile; fileRef = 8D2E28841B0669F500AE62C8 /* com.generalarcade.flycut.xout.16.png */; };
 		8D2E28891B0669F500AE62C8 /* com.generalarcade.flycut.xout.32.png in Resources */ = {isa = PBXBuildFile; fileRef = 8D2E28851B0669F500AE62C8 /* com.generalarcade.flycut.xout.32.png */; };
 		8D84B6381F72FBDC00DB58F9 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8D84B6371F72FBDC00DB58F9 /* CloudKit.framework */; };
+		8D84B63B1F7412E600DB58F9 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8D84B63A1F7412E600DB58F9 /* CloudKit.framework */; };
 		8DCE82681F4550AA00124117 /* MGSwipeTableCell.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8D0DC8571F3D682800A2A8AF /* MGSwipeTableCell.framework */; };
 		8DCE82691F4550AA00124117 /* MGSwipeTableCell.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8D0DC8571F3D682800A2A8AF /* MGSwipeTableCell.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		AABE497C09FF9CD000A6A239 /* AppController.m in Sources */ = {isa = PBXBuildFile; fileRef = AABE497B09FF9CD000A6A239 /* AppController.m */; };
@@ -220,13 +220,13 @@
 		8D153A071F54CCF7006A5815 /* MJCloudKitUserDefaultsSync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = MJCloudKitUserDefaultsSync.h; path = MJCloudKitUserDefaultsSync/MJCloudKitUserDefaultsSync.h; sourceTree = "<group>"; };
 		8D153A081F54CCF7006A5815 /* MJCloudKitUserDefaultsSync.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = MJCloudKitUserDefaultsSync.m; path = MJCloudKitUserDefaultsSync/MJCloudKitUserDefaultsSync.m; sourceTree = "<group>"; };
 		8D153A0C1F5BB249006A5815 /* Flycut.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Flycut.entitlements; sourceTree = "<group>"; };
-		8D153A0D1F5BB24D006A5815 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS10.2.sdk/System/Library/Frameworks/CloudKit.framework; sourceTree = DEVELOPER_DIR; };
 		8D2E28821B0669F500AE62C8 /* com.generalarcade.flycut.black.16.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = com.generalarcade.flycut.black.16.png; path = Resources/com.generalarcade.flycut.black.16.png; sourceTree = "<group>"; };
 		8D2E28831B0669F500AE62C8 /* com.generalarcade.flycut.black.32.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = com.generalarcade.flycut.black.32.png; path = Resources/com.generalarcade.flycut.black.32.png; sourceTree = "<group>"; };
 		8D2E28841B0669F500AE62C8 /* com.generalarcade.flycut.xout.16.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = com.generalarcade.flycut.xout.16.png; path = Resources/com.generalarcade.flycut.xout.16.png; sourceTree = "<group>"; };
 		8D2E28851B0669F500AE62C8 /* com.generalarcade.flycut.xout.32.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = com.generalarcade.flycut.xout.32.png; path = Resources/com.generalarcade.flycut.xout.32.png; sourceTree = "<group>"; };
 		8D84B6361F72FBA900DB58F9 /* Flycut.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Flycut.entitlements; sourceTree = "<group>"; };
 		8D84B6371F72FBDC00DB58F9 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
+		8D84B63A1F7412E600DB58F9 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS10.2.sdk/System/Library/Frameworks/CloudKit.framework; sourceTree = DEVELOPER_DIR; };
 		AABE497A09FF9CD000A6A239 /* AppController.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = AppController.h; sourceTree = "<group>"; };
 		AABE497B09FF9CD000A6A239 /* AppController.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = AppController.m; sourceTree = "<group>"; };
 		AAFAC84A0A1BD9DD00DC6025 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = /System/Library/Frameworks/Carbon.framework; sourceTree = "<absolute>"; };
@@ -239,7 +239,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8D153A0E1F5BB24D006A5815 /* CloudKit.framework in Frameworks */,
+				8D84B63B1F7412E600DB58F9 /* CloudKit.framework in Frameworks */,
 				8DCE82681F4550AA00124117 /* MGSwipeTableCell.framework in Frameworks */,
 				8D0DC85A1F3D697000A2A8AF /* MGSwipeTableCell.framework in Frameworks */,
 			);
@@ -378,8 +378,8 @@
 		29B97323FDCFA39411CA2CEA /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				8D84B63A1F7412E600DB58F9 /* CloudKit.framework */,
 				8D84B6371F72FBDC00DB58F9 /* CloudKit.framework */,
-				8D153A0D1F5BB24D006A5815 /* CloudKit.framework */,
 				1058C7A0FEA54F0111CA2CBB /* Linked Frameworks */,
 				1058C7A2FEA54F0111CA2CBB /* Other Frameworks */,
 			);
@@ -939,6 +939,7 @@
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_ENTITLEMENTS = Flycut.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer: mjerde@me.com (J33CFAMHSW)";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
@@ -1000,6 +1001,7 @@
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_ENTITLEMENTS = Flycut.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer: mjerde@me.com (J33CFAMHSW)";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
