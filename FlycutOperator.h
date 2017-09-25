@@ -61,6 +61,7 @@
 // Save and load
 -(void) saveEngine;
 -(bool) loadEngineFromPList;
+-(void) checkCloudKitUpdates;
 
 // Preference related
 -(void) setRememberNum:(int)newRemember;

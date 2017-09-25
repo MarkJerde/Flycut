@@ -425,6 +425,11 @@
     }
 }
 
+-(void) checkCloudKitUpdates
+{
+	[MJCloudKitUserDefaultsSync checkCloudKitUpdates];
+}
+
 -(bool) loadEngineFromPList
 {
     NSDictionary *loadDict = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"store"] copy];   
