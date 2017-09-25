@@ -847,8 +847,16 @@
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
+	// Enable notification from CloudKit
+	[NSApp registerForRemoteNotificationTypes:NSRemoteNotificationTypeNone];// silent push notification!
+
 	//Create our hot key
 	[self toggleMainHotKey:[NSNull null]];
+}
+
+- (void)application:(NSApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
+{
+	[flycutOperator checkCloudKitUpdates];
 }
 
 - (void) updateBezel
