@@ -7,9 +7,10 @@
 //
 
 import UIKit
+import UserNotifications
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
 	var window: UIWindow?
 
@@ -22,7 +23,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 		appDelegate.myViewController = viewController
 
+		let center = UNUserNotificationCenter.current()
+		center.requestAuthorization(options:[]) { (granted, error) in
+			// Enable or disable features based on authorization.
+		}
+		application.registerForRemoteNotifications()
+
 		return true
+	}
+
+	/*func application(application: UIApplication, didReceiveRemoteNotification userInfo: [NSObject : AnyObject], fetchCompletionHandler completionHandler: (UIBackgroundFetchResult) -> Void) {
+	}*/
+	func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+		print("Thanks for the remote notification!")
+	}
+
+	func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+
+		let deviceTokenString = deviceToken.reduce("", {$0 + String(format: "%02X", $1)})
+		print(deviceTokenString)
+
+
+	}
+
+	func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+
+		print("i am not available in simulator \(error)")
+
 	}
 
 	func applicationWillResignActive(_ application: UIApplication) {
