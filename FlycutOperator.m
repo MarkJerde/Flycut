@@ -20,7 +20,6 @@
 
 - (id)init
 {
-	[MJCloudKitUserDefaultsSync startWithPrefix:@""];
 	[[NSUserDefaults standardUserDefaults] registerDefaults:[NSDictionary dictionaryWithObjectsAndKeys:
 		[NSNumber numberWithInt:40],
 		@"rememberNum",
@@ -50,7 +49,26 @@
         @"saveForgottenFavorites",
         [NSNumber numberWithBool:YES], // do not commit with YES.  Use NO
         @"pasteMovesToTop",
+        [NSNumber numberWithBool:NO],
+        @"syncSettingsViaICloud",
+        [NSNumber numberWithBool:NO],
+        @"syncClippingsViaICloud",
         nil]];
+
+	settingsSyncList = @[@"rememberNum",
+						 @"favoritesRememberNum",
+						 @"savePreference",
+						 @"skipPasswordFields",
+						 @"skipPboardTypes",
+						 @"skipPboardTypesList",
+						 @"skipPasswordLengths",
+						 @"skipPasswordLengthsList",
+						 @"removeDuplicates",
+						 @"saveForgottenClippings",
+						 @"saveForgottenFavorites",
+						 @"pasteMovesToTop"];
+	[settingsSyncList retain];
+
 	return self;
 }
 
@@ -75,6 +93,8 @@
 
 	// Stack position starts @ 0 by default
 	stackPosition = favoritesStackPosition = stashedStackPosition = 0;
+
+	[self registerOrDeregisterICloudSync];
 }
 
 -(void) setRememberNum:(int) newRemember
@@ -330,6 +350,11 @@
 	return [clippingStore jcListCount];
 }
 
+-(int)rememberNum
+{
+	return [clippingStore rememberNum];
+}
+
 -(int)stackPosition
 {
 	return stackPosition;
@@ -423,6 +448,25 @@
     } else { // It fails -- we shouldn't be passed this, but...
         return @"";
     }
+}
+
+-(void) registerOrDeregisterICloudSync
+{
+	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"syncSettingsViaICloud"] ) {
+		[MJCloudKitUserDefaultsSync startWithKeyMatchList:settingsSyncList
+								  withContainerIdentifier:@"iCloud.com.mark-a-jerde.Flycut"];
+	}
+	else {
+		[MJCloudKitUserDefaultsSync stopForKeyMatchList:settingsSyncList];
+	}
+
+	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"syncClippingsViaICloud"] ) {
+		[MJCloudKitUserDefaultsSync startWithKeyMatchList:@[@"store"]
+								  withContainerIdentifier:@"iCloud.com.mark-a-jerde.Flycut"];
+	}
+	else {
+		[MJCloudKitUserDefaultsSync stopForKeyMatchList:@[@"store"]];
+	}
 }
 
 -(void) checkCloudKitUpdates

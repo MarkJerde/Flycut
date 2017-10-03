@@ -29,6 +29,8 @@
 	SEL saveSelector;
 	NSObject* saveTarget;
 
+	NSArray *settingsSyncList;
+
     BOOL disableStore;
 }
 
@@ -61,6 +63,7 @@
 // Save and load
 -(void) saveEngine;
 -(bool) loadEngineFromPList;
+-(void) registerOrDeregisterICloudSync;
 -(void) checkCloudKitUpdates;
 
 // Preference related
@@ -79,6 +82,7 @@
 
 // Clippings Store related
 -(int)jcListCount;
+-(int)rememberNum;
 -(FlycutClipping*)clippingAtStackPosition;
 -(NSArray *) previousDisplayStrings:(int)howMany containing:(NSString*)search;
 -(NSArray *) previousIndexes:(int)howMany containing:(NSString*)search; // This method is in newest-first order.

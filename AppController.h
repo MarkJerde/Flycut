@@ -35,6 +35,8 @@
 	NSString					*currentKeycodeCharacter;
     NSDateFormatter*            dateFormat;
 
+    NSArray *settingsSyncList;
+
     FlycutOperator				*flycutOperator;
 
     // Status item -- the little icon in the menu bar
@@ -105,6 +107,9 @@
 -(IBAction) switchMenuIcon:(id)sender;
 -(IBAction) toggleLoadOnStartup:(id)sender;
 -(IBAction) toggleMainHotKey:(id)sender;
+-(IBAction) toggleICloudSyncSettings:(id)sender;
+-(IBAction) toggleICloudSyncClippings:(id)sender;
+-(IBAction) setSavePreference:(id)sender;
 -(void) setHotKeyPreferenceForRecorder:(SRRecorderControl *)aRecorder;
 
 @end
