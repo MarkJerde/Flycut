@@ -52,6 +52,7 @@ static NSString *recordType = @"UserDefault";
 static NSString *recordName = @"UserDefaults";
 static BOOL oneAutomaticUpdateToICloudAfterUpdateFromICloud = NO;
 static BOOL oneAutomaticUpdateFromICloudAfterUpdateToICloud = NO;
+static BOOL refuseUpdateToICloudUntilAfterUpdateFromICloud = NO;
 static BOOL oneTimeDeleteZoneFromICloud = NO;
 static BOOL updatingToICloud = NO;
 static BOOL updatingFromICloud = NO;
@@ -60,7 +61,7 @@ static BOOL updatingFromICloud = NO;
 
 +(void) updateToiCloud:(NSNotification*) notificationObject {
 	DLog(@"Update to iCloud?");
-	if ( updatingToICloud || updatingFromICloud )
+	if ( updatingToICloud || updatingFromICloud || refuseUpdateToICloudUntilAfterUpdateFromICloud )
 	{
 		if ( updatingToICloud )
 			DLog(@"NO.  Already updating to iCloud");
@@ -69,6 +70,8 @@ static BOOL updatingFromICloud = NO;
 			DLog(@"NO.  Currently updating from iCloud");
 			oneAutomaticUpdateToICloudAfterUpdateFromICloud = YES;
 		}
+		if ( refuseUpdateToICloudUntilAfterUpdateFromICloud )
+			DLog(@"NO.  Waiting until after update from iCloud");
 	}
 	else
 	{
@@ -258,6 +261,7 @@ static BOOL updatingFromICloud = NO;
 				 name:NSUserDefaultsDidChangeNotification
 				 object:nil];*/
 
+				refuseUpdateToICloudUntilAfterUpdateFromICloud = NO;
 				updatingFromICloud = NO;
 			}
 
@@ -288,6 +292,8 @@ static BOOL updatingFromICloud = NO;
 			changeNotificationHandlers = [[NSMutableArray alloc] init];
 		databaseContainerIdentifier = containerIdentifier;
 		prefix = prefixToSync;
+
+		refuseUpdateToICloudUntilAfterUpdateFromICloud = YES;
 
 		[self attemptToEnable];
 	});
@@ -328,6 +334,8 @@ static BOOL updatingFromICloud = NO;
 			[toRelease release];
 
 		NSLog(@"Match list length is now %lu", (unsigned long)[matchList count]);
+
+		refuseUpdateToICloudUntilAfterUpdateFromICloud = YES;
 
 		[self attemptToEnable];
 	});
