@@ -176,7 +176,7 @@
                                                     <button misplaced="YES" id="IXN-q7-y5J">
                                                         <rect key="frame" x="193" y="239" width="79" height="18"/>
                                                         <autoresizingMask key="autoresizingMask"/>
-                                                        <buttonCell key="cell" type="check" title="Clippings" bezelStyle="regularSquare" imagePosition="left" alignment="left" enabled="NO" inset="2" id="oLL-dD-GRW">
+                                                        <buttonCell key="cell" type="check" title="Clippings" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="oLL-dD-GRW">
                                                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                                             <font key="font" metaFont="system"/>
                                                         </buttonCell>
