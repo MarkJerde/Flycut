@@ -28,6 +28,8 @@
 
 	SEL saveSelector;
 	NSObject* saveTarget;
+	int displayNum;
+	int displayLength;
 
 	NSArray *settingsSyncList;
 
@@ -72,6 +74,7 @@
 // Initialization / cleanup related
 -(void)applicationWillTerminate;;
 -(void)awakeFromNibDisplaying:(int) displayNum withDisplayLength:(int) displayLength withSaveSelector:(SEL) selector forTarget:(NSObject*) target;
+-(void)initializeStoresAndLoadContents;
 
 // Favorites Store related
 -(bool)favoritesStoreIsSelected;

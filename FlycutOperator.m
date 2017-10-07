@@ -72,29 +72,44 @@
 	return self;
 }
 
-- (void)awakeFromNibDisplaying:(int) displayNum withDisplayLength:(int) displayLength withSaveSelector:(SEL) selector forTarget:(NSObject*) target
+- (void)awakeFromNibDisplaying:(int) dispNum withDisplayLength:(int) dispLength withSaveSelector:(SEL) selector forTarget:(NSObject*) target
 {
-	// Initialize the FlycutStore
-	clippingStore = [[FlycutStore alloc] initRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"rememberNum"]
-											   displaying:displayNum
-										withDisplayLength:displayLength];
-	favoritesStore = [[FlycutStore alloc] initRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"favoritesRememberNum"]
-											   displaying:displayNum
-										withDisplayLength:displayLength];
+	displayNum = dispNum;
+	displayLength = dispLength;
 	saveSelector = selector;
 	saveTarget = target;
-    stashedStore = NULL;
 
-    // If our preferences indicate that we are saving, load the dictionary from the saved plist
-    // and use it to get everything set up.
-	if ( [[NSUserDefaults standardUserDefaults] integerForKey:@"savePreference"] >= 1 ) {
-		[self loadEngineFromPList];
-	}
+	// Initialize the FlycutStore
+	[self initializeStoresAndLoadContents];
 
 	// Stack position starts @ 0 by default
 	stackPosition = favoritesStackPosition = stashedStackPosition = 0;
 
 	[self registerOrDeregisterICloudSync];
+}
+
+-(void) initializeStoresAndLoadContents
+{
+	if ( clippingStore ) {
+		[clippingStore release];
+	}
+	if ( favoritesStore ) {
+		[favoritesStore release];
+	}
+	// Fixme - These stores are not released elsewhere.
+	clippingStore = [[FlycutStore alloc] initRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"rememberNum"]
+											  displaying:displayNum
+									   withDisplayLength:displayLength];
+	favoritesStore = [[FlycutStore alloc] initRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"favoritesRememberNum"]
+											   displaying:displayNum
+										withDisplayLength:displayLength];
+	stashedStore = NULL;
+
+	// If our preferences indicate that we are saving, load the dictionary from the saved plist
+	// and use it to get everything set up.
+	if ( [[NSUserDefaults standardUserDefaults] integerForKey:@"savePreference"] >= 1 ) {
+		[self loadEngineFromPList];
+	}
 }
 
 -(void) setRememberNum:(int) newRemember

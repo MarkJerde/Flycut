@@ -55,11 +55,11 @@
         @"displayClippingSource",
         nil]];
 
-	/*[[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithBool:NO]
-											 forKey:@"syncSettingsViaICloud"];*/
-	// Force syncClippings disabled, since we need to serialize the clippings list before it will work.
+	/* For testing, the ability to force initial values of the sync settings:
 	[[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithBool:NO]
-											 forKey:@"syncClippingsViaICloud"];
+											 forKey:@"syncSettingsViaICloud"];
+	[[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithBool:NO]
+											 forKey:@"syncClippingsViaICloud"];*/
 
 	settingsSyncList = @[@"displayNum",
 						 @"displayLen",
@@ -81,7 +81,8 @@
 - (void)registerOrDeregisterICloudSync
 {
 	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"syncSettingsViaICloud"] ) {
-		[MJCloudKitUserDefaultsSync addChangeNotificationSelector:@selector(checkPreferencesChanges) withTarget: self];
+		[MJCloudKitUserDefaultsSync removeChangeNotificationsForTarget: self];
+		[MJCloudKitUserDefaultsSync addChangeNotificationSelector:@selector(checkPreferencesChanges:) withTarget: self];
 
 		[MJCloudKitUserDefaultsSync startWithKeyMatchList:settingsSyncList
 					withContainerIdentifier:@"iCloud.com.mark-a-jerde.Flycut"];
@@ -353,11 +354,15 @@
     }
 }
 
--(void) checkPreferencesChanges
+-(void) checkPreferencesChanges:(NSArray*)changes
 {
-	[self checkRememberNumPref:[[NSUserDefaults standardUserDefaults] integerForKey:@"rememberNum"]
-			   forPrimaryStore:YES];
-	[self checkFavoritesRememberNumPref:[[NSUserDefaults standardUserDefaults] integerForKey:@"favoritesRememberNum"]];
+	if ( [changes containsObject:@"rememberNum"] )
+		[self checkRememberNumPref:[[NSUserDefaults standardUserDefaults] integerForKey:@"rememberNum"]
+				   forPrimaryStore:YES];
+	if ( [changes containsObject:@"favoritesRememberNum"] )
+		[self checkFavoritesRememberNumPref:[[NSUserDefaults standardUserDefaults] integerForKey:@"favoritesRememberNum"]];
+	if ( [changes containsObject:@"store"] )
+		[flycutOperator initializeStoresAndLoadContents];
 }
 
 -(IBAction) setRememberNumPref:(id)sender
@@ -1031,20 +1036,6 @@
 
 - (IBAction)toggleICloudSyncClippings:(id)sender
 {
-	if ( [sender isEnabled] )
-	{
-		[[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithBool:NO]
-												 forKey:@"syncClippingsViaICloud"];
-		[sender setEnabled: NO];
-
-		NSAlert *alert = [[NSAlert alloc] init];
-		[alert setMessageText:@"Settings Change"];
-		[alert addButtonWithTitle:@"Ok"];
-		[alert setInformativeText:@"iCloud Clippings Sync is not yet available.  It is disabled in Interface Builder but that doesn't work for some reason.  Since this will be enabled soon, it was decided to just handle it with this kludge.  The setting has been cleared and the checkbox now disabled."];
-		[alert runModal];
-
-		return;
-	}
 	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"syncClippingsViaICloud"] ) {
 		if ( [[NSUserDefaults standardUserDefaults] integerForKey:@"savePreference"] < 2 ) {
 			// Must set syncClippingsViaICloud = 2
@@ -1058,7 +1049,7 @@
 				[[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithInt:2]
 														 forKey:@"savePreference"];
 			} else {
-			 [[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithBool:NO]
+				[[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithBool:NO]
 														 forKey:@"syncClippingsViaICloud"];
 			}
 		}
