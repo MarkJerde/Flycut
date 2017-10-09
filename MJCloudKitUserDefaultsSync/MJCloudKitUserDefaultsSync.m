@@ -53,6 +53,7 @@ static CKDatabase *privateDB;
 // Status flags.
 static BOOL observingIdentityChanges = NO;
 static BOOL observingActivity = NO;
+static BOOL remoteNotificationsEnabled = YES;
 
 // Strings we use.
 static NSString *recordZoneName = @"MJCloudKitUserDefaultsSync";
@@ -396,6 +397,19 @@ static int lastKnownLaunches = -1;
 	}
 }
 
++(void) setRemoteNotificationsEnabled:(bool) enabled
+{
+	if ( enabled != remoteNotificationsEnabled )
+	{
+		bool resume = observingActivity;
+		if ( observingActivity )
+			[self pause];
+		remoteNotificationsEnabled = enabled;
+		if ( resume )
+			[self resume];
+	}
+}
+
 +(void) startWithPrefix:(NSString*) prefixToSync withContainerIdentifier:(NSString*) containerIdentifier {
 	DLog(@"Starting with prefix");
 
@@ -693,15 +707,13 @@ static int lastKnownLaunches = -1;
 #if TARGET_IPHONE_SIMULATOR
 	nil; // Simulator doesn't support remote notifications.
 #else // TARGET_IPHONE_SIMULATOR
+	remoteNotificationsEnabled ?
 	[[CKQuerySubscription alloc] initWithRecordType:recordType
 										  predicate:predicate
 									 subscriptionID:subscriptionID
-											options:CKQuerySubscriptionOptionsFiresOnRecordCreation | CKQuerySubscriptionOptionsFiresOnRecordUpdate | CKQuerySubscriptionOptionsFiresOnRecordDeletion];
+											options:CKQuerySubscriptionOptionsFiresOnRecordCreation | CKQuerySubscriptionOptionsFiresOnRecordUpdate | CKQuerySubscriptionOptionsFiresOnRecordDeletion]
+	: nil;
 #endif // TARGET_IPHONE_SIMULATOR
-
-	// Disable subscription for now, since it is only available in apps distributed via the App Store.  At some point we will want to detect when there is an aps-environment (Push Notifications) entitlement and use subscription in that case.
-	[subscription release];
-	subscription = nil;
 
 	if ( nil == subscription )
 	{

@@ -51,6 +51,7 @@ static inline MJSyncNotificationType MJSyncNotificationTypeLast() { return MJSyn
 
 @interface MJCloudKitUserDefaultsSync : NSObject
 
++(void) setRemoteNotificationsEnabled:(bool) enabled;
 +(void) startWithPrefix:(NSString*) prefixToSync withContainerIdentifier:(NSString*) containerIdentifier;
 +(void) startWithKeyMatchList:(NSArray*) keyMatchList withContainerIdentifier:(NSString*) containerIdentifier;
 +(void) stopForKeyMatchList:(NSArray*) keyMatchList;

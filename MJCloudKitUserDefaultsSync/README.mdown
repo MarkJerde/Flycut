@@ -7,19 +7,42 @@ distributed outside of the App Store.
 ### How to use?
 1. Drag the two classes and #import the header file in your Application Delegate
 2. Call `[MJCloudKitUserDefaultsSync startWithPrefix:@"sync" withContainerIdentifier@"iCloud.com.yourCompany.yourProduct"];`
-3. Add a NotificationCenter receiver as follows
+3. Register for Remote Notifications in your applicationDidFinishLaunching.
 
-macOS:
+        // macOS
+        - (void)applicationDidFinishLaunching:(NSNotification *)notification
+        {
+        	// Enable notification from CloudKit
+        	[NSApp registerForRemoteNotificationTypes:NSRemoteNotificationTypeNone];// silent push notification!
+        
+        	//Create our hot key
+        	[self toggleMainHotKey:[NSNull null]];
+        }
+4. Add a NotificationCenter receiver and optional registration handlers as follows
 
-```objective-c
-- (void)application:(NSApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
-{
-	[MJCloudKitUserDefaultsSync checkCloudKitUpdates];
-}
-```
+        // macOS:
+        - (void)application:(NSApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
+        {
+        	[MJCloudKitUserDefaultsSync checkCloudKitUpdates];
+        }
+        
+        // Remote Notifications (APN, aka Push Notifications) are only available on apps distributed via the App Store.
+        // To support building for both distribution channels, include the following two methods to detect if Remote Notifications are available and inform MJCloudKitUserDefaultsSync.
+        - (void)application:(NSApplication *)application
+        didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+        	// Forward the token to your provider, using a custom method.
+        	NSLog(@"Registered for remote notifications.");
+        	[MJCloudKitUserDefaultsSync setRemoteNotificationsEnabled:YES];
+        }
+        
+        - (void)application:(NSApplication *)application
+        didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+        	NSLog(@"Remote notification support is unavailable due to error: %@", error);
+        	[MJCloudKitUserDefaultsSync setRemoteNotificationsEnabled:NO];
+        }
 
-iOS:
-TBD
+        // iOS:
+        // TBD
 
 ### To Do
 * GCD would be preferable to the boolean flags currently used to serialize activity, but CloudKit makes heavy use of asynchronous completion handlers so a solution needs to be worked out to keep blocking our GCD serial queue until the CloudKit completions have been completed.
