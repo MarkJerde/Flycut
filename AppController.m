@@ -924,6 +924,21 @@
 	[self toggleMainHotKey:[NSNull null]];
 }
 
+// Remote Notifications (APN, aka Push Notifications) are only available on apps distributed via the App Store.
+// To support building for both distribution channels, include the following two methods to detect if Remote Notifications are available and inform MJCloudKitUserDefaultsSync.
+- (void)application:(NSApplication *)application
+didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+	// Forward the token to your provider, using a custom method.
+	NSLog(@"Registered for remote notifications.");
+	[MJCloudKitUserDefaultsSync setRemoteNotificationsEnabled:YES];
+}
+
+- (void)application:(NSApplication *)application
+didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+	NSLog(@"Remote notification support is unavailable due to error: %@", error);
+	[MJCloudKitUserDefaultsSync setRemoteNotificationsEnabled:NO];
+}
+
 - (void)application:(NSApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
 {
 	[flycutOperator checkCloudKitUpdates];
