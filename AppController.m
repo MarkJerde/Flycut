@@ -81,8 +81,9 @@
 - (void)registerOrDeregisterICloudSync
 {
 	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"syncSettingsViaICloud"] ) {
-		[MJCloudKitUserDefaultsSync removeChangeNotificationsForTarget: self];
-		[MJCloudKitUserDefaultsSync addChangeNotificationSelector:@selector(checkPreferencesChanges:) withTarget: self];
+		[MJCloudKitUserDefaultsSync removeNotificationsFor:MJSyncNotificationChanges forTarget:self];
+		[MJCloudKitUserDefaultsSync addNotificationFor:MJSyncNotificationChanges withSelector:@selector(checkPreferencesChanges:) withTarget: self];
+		// Not registering for conflict notifications, since we just sync settings, and if the settings are conflictingly adjusted simultaneously on two systems there is nothing to say which setting is better.
 
 		[MJCloudKitUserDefaultsSync startWithKeyMatchList:settingsSyncList
 					withContainerIdentifier:@"iCloud.com.mark-a-jerde.Flycut"];
@@ -90,7 +91,7 @@
 	else {
 		[MJCloudKitUserDefaultsSync stopForKeyMatchList:settingsSyncList];
 
-		[MJCloudKitUserDefaultsSync removeChangeNotificationsForTarget: self];
+		[MJCloudKitUserDefaultsSync removeNotificationsFor:MJSyncNotificationChanges forTarget:self];
 	}
 
 	[flycutOperator registerOrDeregisterICloudSync];
@@ -354,15 +355,14 @@
     }
 }
 
--(void) checkPreferencesChanges:(NSArray*)changes
+-(NSDictionary*) checkPreferencesChanges:(NSDictionary*)changes
 {
-	if ( [changes containsObject:@"rememberNum"] )
+	if ( [changes valueForKey:@"rememberNum"] )
 		[self checkRememberNumPref:[[NSUserDefaults standardUserDefaults] integerForKey:@"rememberNum"]
 				   forPrimaryStore:YES];
-	if ( [changes containsObject:@"favoritesRememberNum"] )
+	if ( [changes valueForKey:@"favoritesRememberNum"] )
 		[self checkFavoritesRememberNumPref:[[NSUserDefaults standardUserDefaults] integerForKey:@"favoritesRememberNum"]];
-	if ( [changes containsObject:@"store"] )
-		[flycutOperator initializeStoresAndLoadContents];
+	return nil;
 }
 
 -(IBAction) setRememberNumPref:(id)sender

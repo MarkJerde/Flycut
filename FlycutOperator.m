@@ -476,12 +476,41 @@
 	}
 
 	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"syncClippingsViaICloud"] ) {
+		[MJCloudKitUserDefaultsSync removeNotificationsFor:MJSyncNotificationChanges forTarget:self];
+		[MJCloudKitUserDefaultsSync addNotificationFor:MJSyncNotificationChanges withSelector:@selector(checkPreferencesChanges:) withTarget: self];
+
+		[MJCloudKitUserDefaultsSync removeNotificationsFor:MJSyncNotificationConflicts forTarget:self];
+		[MJCloudKitUserDefaultsSync addNotificationFor:MJSyncNotificationConflicts withSelector:@selector(checkPreferencesConflicts:) withTarget: self];
+
 		[MJCloudKitUserDefaultsSync startWithKeyMatchList:@[@"store"]
 								  withContainerIdentifier:@"iCloud.com.mark-a-jerde.Flycut"];
 	}
 	else {
+		[MJCloudKitUserDefaultsSync removeNotificationsFor:MJSyncNotificationChanges forTarget:self];
+
 		[MJCloudKitUserDefaultsSync stopForKeyMatchList:@[@"store"]];
 	}
+}
+
+-(NSDictionary*) checkPreferencesChanges:(NSDictionary*)changes
+{
+	if ( [changes valueForKey:@"store"] )
+		[self initializeStoresAndLoadContents];
+	return nil;
+}
+
+-(NSDictionary*) checkPreferencesConflicts:(NSDictionary*)changes
+{
+	NSMutableDictionary *corrections = nil;
+	if ( [changes valueForKey:@"store"] )
+	{
+		// Just clobber back, for now.  They already finished their save, so they won't notice and will just think we made a calculated change.
+		NSLog(@"Oh.  My changes were clobbered.  I will clobber back.");
+		if ( !corrections )
+			corrections = [[NSMutableDictionary alloc] init];
+		corrections[@"store"] = [changes valueForKey:@"store"][1]; // We win.
+	}
+	return corrections;
 }
 
 -(void) checkCloudKitUpdates
