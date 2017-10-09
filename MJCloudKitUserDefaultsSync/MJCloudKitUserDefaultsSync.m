@@ -43,7 +43,7 @@ static NSString *databaseContainerIdentifier = nil;
 static CKRecordZone *recordZone = nil;
 static CKRecordZoneID *recordZoneID = nil;
 static CKRecordID *recordID = nil;
-static NSMutableArray *changeNotificationHandlers = nil;
+static NSMutableArray *changeNotificationHandlers[] = {nil,nil};
 static CKServerChangeToken *previousChangeToken = nil;
 
 // Things we don't retain.
@@ -119,7 +119,8 @@ static int lastKnownLaunches = -1;
 				if([dict objectForKey:@"rememberNum"])
 					DLog(@"you got it");
 
-				__block int additions = 0, changes = 0;
+				__block int additions = 0, modifications = 0;
+				__block NSMutableDictionary *changes = nil;
 				// Maybe we could compare record and dict, creating an array of only the items which are not identical in both.
 				[dict enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
 					if ( ( nil != prefix && [key hasPrefix:prefix] )
@@ -152,7 +153,7 @@ static int lastKnownLaunches = -1;
 								 || ( [obj isKindOfClass:[NSData class]] && ![(NSData*)obj isEqualToData:(NSData*)record[key]] ) )
 						{
 							DLog(@"Changing %@.", key);
-							changes++;
+							modifications++;
 						}
 						else
 						{
@@ -161,12 +162,22 @@ static int lastKnownLaunches = -1;
 						}
 
 						if ( !skip )
+						{
+							if ( !changes )
+								changes = [[NSMutableDictionary alloc] init];
+
+							NSMutableArray *fromToTheirs = [[NSMutableArray alloc] init];
+							[fromToTheirs addObject:record[key]];
+							[fromToTheirs addObject:obj];
+							[changes setObject:fromToTheirs forKey:key];
+
 							record[key] = obj;
+						}
 					}
 				}];
-				DLog(@"To iCloud: Adding %i keys.  Modifying %i keys.", additions, changes);
+				DLog(@"To iCloud: Adding %i keys.  Modifying %i keys.", additions, modifications);
 
-				if ( additions + changes > 0 )
+				if ( additions + modifications > 0 )
 				{
 					[privateDB saveRecord:record completionHandler:^(CKRecord *savedRecord, NSError *saveError) {
 						DLog(@"Saving to iCloud.");
@@ -174,32 +185,76 @@ static int lastKnownLaunches = -1;
 						{
 							// Error handling for failed save to public database
 							DLog(@"CloudKit Save failure: %@", saveError.localizedDescription);
-						}
-						updatingToICloud = NO;
 
-						if ( oneAutomaticUpdateFromICloudAfterUpdateToICloud )
-						{
-							oneAutomaticUpdateFromICloudAfterUpdateToICloud = NO;
-							[self updateFromiCloud:nil];
+							[privateDB fetchRecordWithID:recordID completionHandler:^(CKRecord *newRecord, NSError *error) {
+								if (error) {
+										// Error handling for failed fetch from public database
+										DLog(@"CloudKit Fetch failure: %@", error.localizedDescription);
+										updatingToICloud = NO;
+								}
+								else {
+									DLog(@"Updating to iCloud completion");
+
+									[changes enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
+										[obj addObject:[newRecord objectForKey:key]];
+									}];
+
+									NSDictionary *corrections = [self sendNotificationsFor:MJSyncNotificationConflicts onKeys:changes];
+
+									if ( corrections && [corrections count] )
+									{
+										[corrections enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
+											newRecord[key] = obj;
+										}];
+										[corrections release];
+
+										[privateDB saveRecord:newRecord completionHandler:^(CKRecord *savedRecord, NSError *saveError) {
+											DLog(@"Saving to iCloud.");
+											if ( saveError )
+											{
+												// If we had a conflict on the conflict resolution, just give up for now.
+												DLog(@"CloudKit conflict-resolution Save failure: %@", saveError.localizedDescription);
+											}
+
+											[self completeUpdateToiCloudWithChanges:changes];
+										}];
+									}
+									else
+										[self completeUpdateToiCloudWithChanges:changes];
+								}
+							}];
 						}
+						else
+							[self completeUpdateToiCloudWithChanges:changes];
 					}];
 				}
 				else
-				{
-					updatingToICloud = NO;
-
-					if ( oneAutomaticUpdateFromICloudAfterUpdateToICloud )
-					{
-						oneAutomaticUpdateFromICloudAfterUpdateToICloud = NO;
-						[self updateFromiCloud:nil];
-					}
-				}
+					[self completeUpdateToiCloudWithChanges:changes];
 
 				// If the record wasn't found, so we had to create it, then we own it and better release it.
 				if ( needToReleaseRecord )
 					[record release];
 			}
 		}];
+	}
+}
+
++(void) completeUpdateToiCloudWithChanges:(NSMutableDictionary*) changes
+{
+	updatingToICloud = NO;
+
+	if ( changes )
+	{
+		[changes enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
+			[obj release];
+		}];
+		[changes release];
+	}
+
+	if ( oneAutomaticUpdateFromICloudAfterUpdateToICloud )
+	{
+		oneAutomaticUpdateFromICloudAfterUpdateToICloud = NO;
+		[self updateFromiCloud:nil];
 	}
 }
 
@@ -237,8 +292,8 @@ static int lastKnownLaunches = -1;
 
 				DLog(@"Got record -%@-_-%@-_-%@-_-%@-",[[[record recordID] zoneID] zoneName],[[[record recordID] zoneID] ownerName],[[record recordID] recordName],[record recordChangeTag]);
 
-				__block int additions = 0, changes = 0;
-				__block NSMutableArray *changedKeys = nil;
+				__block int additions = 0, modifications = 0;
+				__block NSMutableDictionary *changes = nil;
 				[[record allKeys] enumerateObjectsUsingBlock:^(id key, NSUInteger idx, BOOL *stop) {
 					if ( ( nil != prefix && [key hasPrefix:prefix] )
 						|| ( nil != matchList && [matchList containsObject:key] ) ) {
@@ -273,7 +328,7 @@ static int lastKnownLaunches = -1;
 								 || ( [obj isKindOfClass:[NSData class]] && ![(NSData*)obj isEqualToData:(NSData*)record[key]] ) )
 						{
 							DLog(@"Changing %@.", key);
-							changes++;
+							modifications++;
 						}
 						else
 						{
@@ -303,22 +358,23 @@ static int lastKnownLaunches = -1;
 							if ( !skip )
 							{
 								[[NSUserDefaults standardUserDefaults] setObject:remoteObj forKey:key];
-								if ( !changedKeys )
-									changedKeys = [[NSMutableArray alloc] init];
-								[changedKeys addObject:key];
+								if ( !changes )
+									changes = [[NSMutableDictionary alloc] init];
+								[changes setObject:key forKey:key];
 							}
 						}
 					}
 				}];
-				DLog(@"From iCloud: Adding %i keys.  Modifying %i keys.", additions, changes);
+				DLog(@"From iCloud: Adding %i keys.  Modifying %i keys.", additions, modifications);
 
-				if ( additions + changes > 0 )
+				if ( additions + modifications > 0 )
 				{
 					DLog(@"Synchronizing defaults.");
 					[[NSUserDefaults standardUserDefaults] synchronize];
-					[self sendChangeNotificationsFor:changedKeys];
-					if ( changedKeys )
-						[changedKeys release];
+
+					[self sendNotificationsFor:MJSyncNotificationChanges onKeys:changes];
+
+					[changes release];
 				}
 
 				// enable NSUserDefaultsDidChangeNotification notifications again
@@ -459,45 +515,59 @@ static int lastKnownLaunches = -1;
 		[databaseContainerIdentifier release];
 		databaseContainerIdentifier = nil;
 	}
-	if ( changeNotificationHandlers )
+	for ( int type = MJSyncNotificationTypeFirst(); type <= MJSyncNotificationTypeLast(); type++ )
 	{
-		[changeNotificationHandlers release];
-		changeNotificationHandlers = nil;
+		if ( changeNotificationHandlers[type] )
+		{
+			[changeNotificationHandlers[type] release];
+			changeNotificationHandlers[type] = nil;
+		}
 	}
 	NSLog(@"Stopped.");
 }
 
-+(void) addChangeNotificationSelector:(SEL)aSelector withTarget:(nullable id)aTarget {
++(void) addNotificationFor:(MJSyncNotificationType)type withSelector:(SEL)aSelector withTarget:(nullable id)aTarget {
 	NSLog(@"Registering change notification selector.");
-	if ( !changeNotificationHandlers )
-		changeNotificationHandlers = [[NSMutableArray alloc] init];
-	[changeNotificationHandlers addObject:aTarget];
-	[changeNotificationHandlers addObject:[NSValue valueWithPointer:aSelector]];
+	if ( !changeNotificationHandlers[type] )
+		changeNotificationHandlers[type] = [[NSMutableArray alloc] init];
+	[changeNotificationHandlers[type] addObject:aTarget];
+	[changeNotificationHandlers[type] addObject:[NSValue valueWithPointer:aSelector]];
 }
 
-+(void) removeChangeNotificationsForTarget:(nullable id) aTarget {
++(void) removeNotificationsFor:(MJSyncNotificationType)type forTarget:(nullable id) aTarget {
 	NSLog(@"Removing change notification selector(s).");
-	while ( changeNotificationHandlers )
+	while ( changeNotificationHandlers[type] )
 	{
-		NSUInteger index = [changeNotificationHandlers indexOfObjectIdenticalTo:aTarget];
+		NSUInteger index = [changeNotificationHandlers[type] indexOfObjectIdenticalTo:aTarget];
 		if ( NSNotFound == index )
 			return;
 		NSLog(@"Removing a change notification selector.");
-		[changeNotificationHandlers removeObjectAtIndex:index]; // Target
-		[changeNotificationHandlers removeObjectAtIndex:index]; // Selector
+		[changeNotificationHandlers[type] removeObjectAtIndex:index]; // Target
+		[changeNotificationHandlers[type] removeObjectAtIndex:index]; // Selector
 	}
 }
 
-+(void) sendChangeNotificationsFor:(NSArray*) changes {
++(NSDictionary*) sendNotificationsFor:(MJSyncNotificationType)type onKeys:(NSDictionary*) changes {
 	NSLog(@"Sending change notification selector(s).");
-	if (changeNotificationHandlers)
+	__block NSMutableDictionary *corrections = nil;
+	if (changeNotificationHandlers[type])
 	{
-		for ( int i = 0 ; i < [changeNotificationHandlers count] ; i+=2 )
+		for ( int i = 0 ; i < [changeNotificationHandlers[type] count] ; i+=2 )
 		{
 			NSLog(@"Sending a change notification selector.");
-			[changeNotificationHandlers[i] performSelector:[changeNotificationHandlers[i+1] pointerValue] withObject:changes];
+			NSDictionary *currentCorrections = [changeNotificationHandlers[type][i] performSelector:[changeNotificationHandlers[type][i+1] pointerValue] withObject:changes];
+			if ( currentCorrections )
+			{
+				[currentCorrections enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
+					if ( !corrections )
+						corrections = [[NSMutableDictionary alloc] init];
+					[corrections setObject:obj forKey:key];
+				}];
+				[currentCorrections release];
+			}
 		}
 	}
+	return corrections;
 }
 
 +(void) identityDidChange:(NSNotification*) notificationObject {
@@ -628,6 +698,11 @@ static int lastKnownLaunches = -1;
 									 subscriptionID:subscriptionID
 											options:CKQuerySubscriptionOptionsFiresOnRecordCreation | CKQuerySubscriptionOptionsFiresOnRecordUpdate | CKQuerySubscriptionOptionsFiresOnRecordDeletion];
 #endif // TARGET_IPHONE_SIMULATOR
+
+	// Disable subscription for now, since it is only available in apps distributed via the App Store.  At some point we will want to detect when there is an aps-environment (Push Notifications) entitlement and use subscription in that case.
+	[subscription release];
+	subscription = nil;
+
 	if ( nil == subscription )
 	{
 		DLog(@"Using polling instead.");
@@ -747,6 +822,7 @@ static int lastKnownLaunches = -1;
 
 +(void)pollCloudKit:(NSTimer *)timer {
 	// CKFetchRecordChangesOperation is OS X 10.10 to 10.12, but CKQuerySubscription is 10.12+ so for code exclusive to our pre-CKQuerySubscription support we can use things that were deprecated when CKQuerySubscription was added.
+	// We will have to revisit this ^ since Push Notifications is only allowed if distributed through the App Store and CKQuerySubscription depends on Push Notifications.
 	DLog(@"Polling");
 	CKFetchRecordChangesOperation *operation = [[CKFetchRecordChangesOperation alloc] initWithRecordZoneID:recordZone.zoneID previousServerChangeToken:previousChangeToken];
 	operation.recordChangedBlock = ^(CKRecord *record) {

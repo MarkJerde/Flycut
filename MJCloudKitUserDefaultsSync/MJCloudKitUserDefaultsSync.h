@@ -42,12 +42,19 @@
 
 #import <Foundation/Foundation.h>
 
+typedef NS_ENUM(NSUInteger, MJSyncNotificationType) {
+	MJSyncNotificationChanges = 0,
+	MJSyncNotificationConflicts
+};
+static inline MJSyncNotificationType MJSyncNotificationTypeFirst() { return MJSyncNotificationChanges; }
+static inline MJSyncNotificationType MJSyncNotificationTypeLast() { return MJSyncNotificationConflicts; }
+
 @interface MJCloudKitUserDefaultsSync : NSObject
 
 +(void) startWithPrefix:(NSString*) prefixToSync withContainerIdentifier:(NSString*) containerIdentifier;
 +(void) startWithKeyMatchList:(NSArray*) keyMatchList withContainerIdentifier:(NSString*) containerIdentifier;
 +(void) stopForKeyMatchList:(NSArray*) keyMatchList;
-+(void) addChangeNotificationSelector:(SEL)aSelector withTarget:(nullable id)aTarget;
-+(void) removeChangeNotificationsForTarget:(nullable id) aTarget;
++(void) addNotificationFor:(MJSyncNotificationType)type withSelector:(SEL)aSelector withTarget:(nullable id)aTarget;
++(void) removeNotificationsFor:(MJSyncNotificationType)type forTarget:(nullable id) aTargetadd;
 +(void) checkCloudKitUpdates;
 @end
