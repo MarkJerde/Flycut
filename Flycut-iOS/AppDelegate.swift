@@ -43,12 +43,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 		let deviceTokenString = deviceToken.reduce("", {$0 + String(format: "%02X", $1)})
 		print(deviceTokenString)
 
-
+		MJCloudKitUserDefaultsSync.setRemoteNotificationsEnabled(true)
 	}
 
 	func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
 
 		print("i am not available in simulator \(error)")
+		MJCloudKitUserDefaultsSync.setRemoteNotificationsEnabled(false)
 
 	}
 
