@@ -88,22 +88,38 @@
 	[self registerOrDeregisterICloudSync];
 }
 
+-(FlycutStore*) allocInitFlycutStoreRemembering:(int) remembering
+{
+	return [[FlycutStore alloc] initRemembering:remembering
+									 displaying:displayNum
+							  withDisplayLength:displayLength];
+}
+
+-(void) initializeStores
+{
+	// Fixme - These stores are not released anywhere.
+	if ( !clippingStore )
+		clippingStore = [self allocInitFlycutStoreRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"rememberNum"]];
+	else
+	{
+		[clippingStore setDisplayNum:displayNum];
+		[clippingStore setDisplayLen:displayLength];
+	}
+
+	if ( ! favoritesStore )
+		favoritesStore = [self allocInitFlycutStoreRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"favoritesRememberNum"]];
+	else
+	{
+		[favoritesStore setDisplayNum:displayNum];
+		[favoritesStore setDisplayLen:displayLength];
+	}
+
+	stashedStore = NULL;
+}
+
 -(void) initializeStoresAndLoadContents
 {
-	if ( clippingStore ) {
-		[clippingStore release];
-	}
-	if ( favoritesStore ) {
-		[favoritesStore release];
-	}
-	// Fixme - These stores are not released elsewhere.
-	clippingStore = [[FlycutStore alloc] initRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"rememberNum"]
-											  displaying:displayNum
-									   withDisplayLength:displayLength];
-	favoritesStore = [[FlycutStore alloc] initRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"favoritesRememberNum"]
-											   displaying:displayNum
-										withDisplayLength:displayLength];
-	stashedStore = NULL;
+	[self initializeStores];
 
 	// If our preferences indicate that we are saving, load the dictionary from the saved plist
 	// and use it to get everything set up.
@@ -215,7 +231,7 @@
         }
         // Get text from clipping store.
         [favoritesStore addClipping:[clippingStore clippingAtPosition:stackPosition] ];
-        [clippingStore clearItem:stackPosition];
+        [self clearItemAtStackPosition];
         return YES;
     }
     return NO;
@@ -320,6 +336,20 @@
 	return disableStore;
 }
 
+-(void)setClippingsStoreDelegate:(id<FlycutStoreDelegate>) delegate
+{
+	if ( !clippingStore )
+		[self initializeStores];
+	clippingStore.delegate = delegate;
+}
+
+-(void)setFavoritesStoreDelegate:(id<FlycutStoreDelegate>) delegate
+{
+	if ( !favoritesStore )
+		[self initializeStores];
+	favoritesStore.delegate = delegate;
+}
+
 -(int)indexOfClipping:(NSString*)contents ofType:(NSString*)type fromApp:(NSString *)appName withAppBundleURL:(NSString *)bundleURL
 {
 	return [clippingStore indexOfClipping:contents
@@ -338,7 +368,8 @@
             // clippingStore is full, so save the last entry before it gets lost.
             // Set to last item, save, and restore position.
             int savePosition = stackPosition;
-            stackPosition = [clippingStore rememberNum]-1;
+			stackPosition = [clippingStore rememberNum]-1;
+
             [self saveFromStackWithPrefix:@"Autosave "];
             stackPosition = savePosition;
         }
@@ -348,6 +379,7 @@
 							 fromAppLocalizedName:appName
 								 fromAppBundleURL:bundleURL
 									  atTimestamp:[[NSDate date] timeIntervalSince1970]];
+
 //		The below tracks our position down down down... Maybe as an option?
 //		if ( [clippingStore jcListCount] > 1 ) stackPosition++;
 		stackPosition = 0;
@@ -416,7 +448,8 @@
     if ([clippingStore jcListCount] == 0)
         return NO;
 
-    [clippingStore clearItem:stackPosition];
+	[clippingStore clearItem:stackPosition];
+
     return YES;
 }
 

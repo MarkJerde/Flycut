@@ -74,7 +74,6 @@
 // Initialization / cleanup related
 -(void)applicationWillTerminate;;
 -(void)awakeFromNibDisplaying:(int) displayNum withDisplayLength:(int) displayLength withSaveSelector:(SEL) selector forTarget:(NSObject*) target;
--(void)initializeStoresAndLoadContents;
 
 // Favorites Store related
 -(bool)favoritesStoreIsSelected;
@@ -91,6 +90,8 @@
 -(NSArray *) previousIndexes:(int)howMany containing:(NSString*)search; // This method is in newest-first order.
 -(void)setDisableStoreTo:(bool) value;
 -(bool)storeDisabled;
+-(void)setClippingsStoreDelegate:(id<FlycutStoreDelegate>) delegate;
+-(void)setFavoritesStoreDelegate:(id<FlycutStoreDelegate>) delegate;
 
 @end
 

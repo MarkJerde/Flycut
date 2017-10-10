@@ -8,11 +8,12 @@
 
 import UIKit
 
-class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSource {
+class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSource, FlycutStoreDelegate {
 
 	let flycut:FlycutOperator = FlycutOperator()
-	var adjustQuantity:Int = 0
+	var activeUpdates:Int = 0
 	var tableView:UITableView!
+	var currentAnimation = UITableViewRowAnimation.none
 
 	// Some buttons we will reuse.
 	var deleteButton:MGSwipeButton? = nil
@@ -31,11 +32,11 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 		deleteButton = MGSwipeButton(title: "Delete", backgroundColor: .red, callback: { (cell) -> Bool in
 			let indexPath = self.tableView.indexPath(for: cell)
 			if ( nil != indexPath ) {
+				let previousAnimation = self.currentAnimation
+				self.currentAnimation = UITableViewRowAnimation.left // Use .left to look better with swiping left to delete.
 				self.flycut.setStackPositionTo( Int32((indexPath?.row)! ))
 				self.flycut.clearItemAtStackPosition()
-				self.tableView.beginUpdates()
-				self.tableView.deleteRows(at: [indexPath!], with: .left) // Use .left to look better with swiping left to delete.
-				self.tableView.endUpdates()
+				self.currentAnimation = previousAnimation
 			}
 
 			return true;
@@ -52,6 +53,12 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 			return true;
 		})
 
+		// Enable sync by default on iOS until we have a mechanism to adjust preferences on-device.
+		UserDefaults.standard.set(NSNumber(value: true), forKey: "syncSettingsViaICloud")
+		UserDefaults.standard.set(NSNumber(value: true), forKey: "syncClippingsViaICloud")
+
+		flycut.setClippingsStoreDelegate(self);
+
 		flycut.awake(fromNibDisplaying: 10, withDisplayLength: 140, withSave: #selector(savePreferences(toDict:)), forTarget: self) // The 10 isn't used in iOS right now and 140 characters seems to be enough to cover the width of the largest screen.
 
 		NotificationCenter.default.addObserver(self, selector: #selector(self.checkForClippingAddedToClipboard), name: .UIPasteboardChanged, object: nil)
@@ -63,40 +70,86 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 	{
 	}
 
+	func beginUpdates()
+	{
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { beginUpdates() }
+			return
+		}
+
+		print("Begin updates")
+		print("Num rows: \(tableView.dataSource?.tableView(tableView, numberOfRowsInSection: 0))")
+		if ( 0 == activeUpdates )
+		{
+			tableView.beginUpdates()
+		}
+		activeUpdates += 1
+	}
+
+	func endUpdates()
+	{
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { endUpdates() }
+			return
+		}
+
+		print("End updates");
+		activeUpdates -= 1;
+		if ( 0 == activeUpdates )
+		{
+			tableView.endUpdates()
+		}
+	}
+
+	func insertClipping(at index: Int32) {
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { insertClipping(at: index) }
+			return
+		}
+		print("Insert row \(index)")
+		tableView.insertRows(at: [IndexPath(row: Int(index), section: 0)], with: currentAnimation) // We will override the animation for now, because we are the ViewController and should guide the UX.
+	}
+
+	func deleteClipping(at index: Int32) {
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { deleteClipping(at: index) }
+			return
+		}
+		print("Delete row \(index)")
+		tableView.deleteRows(at: [IndexPath(row: Int(index), section: 0)], with: currentAnimation) // We will override the animation for now, because we are the ViewController and should guide the UX.
+	}
+
+	func reloadClipping(at index: Int32) {
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { reloadClipping(at: index) }
+			return
+		}
+		print("Reloading row \(index)")
+		tableView.reloadRows(at: [IndexPath(row: Int(index), section: 0)], with: currentAnimation) // We will override the animation for now, because we are the ViewController and should guide the UX.
+	}
+
+	func moveClipping(at index: Int32, to newIndex: Int32) {
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { moveClipping(at: index, to: newIndex) }
+			return
+		}
+		print("Moving row \(index) to \(newIndex)")
+		tableView.moveRow(at: IndexPath(row: Int(index), section: 0), to: IndexPath(row: Int(newIndex), section: 0))
+	}
+
 	func checkForClippingAddedToClipboard()
 	{
 		let pasteboard = UIPasteboard.general.string
 		if ( nil != pasteboard )
 		{
+			flycut.addClipping(pasteboard, ofType: "public.utf8-plain-text", fromApp: "iOS", withAppBundleURL: "iOS", target: nil, clippingAddedSelector: nil)
 
-			let startCount = Int(flycut.jcListCount())
-			let previousIndex = flycut.index(ofClipping: pasteboard, ofType: "public.utf8-plain-text", fromApp: "iOS", withAppBundleURL: "iOS")
-			let added = flycut.addClipping(pasteboard, ofType: "public.utf8-plain-text", fromApp: "iOS", withAppBundleURL: "iOS", target: nil, clippingAddedSelector: nil)
-
-			if ( added )
-			{
-				var reAdjustQuantity = 0
-				var deleteIndex = -1
-				if( -1 < previousIndex )
-				{
-					deleteIndex = Int(previousIndex)
-				}
-				else if(startCount == Int(flycut.jcListCount()))
-				{
-					deleteIndex = startCount - 1
-				}
-
-				tableView.beginUpdates()
-				if ( deleteIndex >= 0 )
-				{
-					adjustQuantity -= 1
-					reAdjustQuantity = 1
-					tableView.deleteRows(at: [IndexPath(row: deleteIndex, section: 0)], with: .none)
-				}
-				adjustQuantity += reAdjustQuantity
-				tableView.insertRows(at: [IndexPath(row: 0, section: 0)], with: .none)
-				tableView.endUpdates()
-			}
 		}
 	}
 
@@ -121,7 +174,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 	}
 
 	func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-		return Int(flycut.jcListCount()) + adjustQuantity
+		return Int(flycut.jcListCount())
 	}
 
 	func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -162,9 +215,9 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
 	func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
 		if ( MGSwipeState.none == (tableView.cellForRow(at: indexPath) as! MGSwipeTableCell).swipeState ) {
-			let content = flycut.clippingString(withCount: Int32(indexPath.row) )
+			tableView.deselectRow(at: indexPath, animated: true) // deselect before getPaste since getPaste may reorder the list
+			let content = flycut.getPasteFrom(Int32(indexPath.row))
 			print("Select: \(indexPath.row) \(content) OK")
-			tableView.deselectRow(at: indexPath, animated: true)
 			UIPasteboard.general.string = content
 		}
 	}

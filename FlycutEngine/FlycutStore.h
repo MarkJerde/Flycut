@@ -13,6 +13,18 @@
 #import <Foundation/Foundation.h>
 #import "FlycutClipping.h"
 
+@protocol FlycutStoreDelegate <NSObject>
+@optional
+- (void)beginUpdates; // allow multiple insert/delete of rows and sections to be animated simultaneously. Nestable
+
+- (void)endUpdates; // only call insert/delete/reload calls or change the editing state inside an update block.  otherwise things like row count, etc. may be invalid.
+
+- (void)insertClippingAtIndex:(int)index;
+- (void)deleteClippingAtIndex:(int)index;
+- (void)reloadClippingAtIndex:(int)index;
+- (void)moveClippingAtIndex:(int)index toIndex:(int)newIndex;
+@end
+
 @interface FlycutStore : NSObject {
 
     // Our various listener-related preferences
@@ -67,6 +79,9 @@
 
 // Move the clipping at index to the top
 -(void) clippingMoveToTop:(int)index;
+
+/** optional delegate (not retained) */
+@property (nonatomic, nullable, assign) id<FlycutStoreDelegate> delegate;
 
 // Delete all named clippings
 @end
