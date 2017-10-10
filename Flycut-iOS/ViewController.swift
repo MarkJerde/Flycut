@@ -12,6 +12,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
 	let flycut:FlycutOperator = FlycutOperator()
 	var adjustQuantity:Int = 0
+	var activeUpdates:Int = 0
 	var tableView:UITableView!
 
 	// Some buttons we will reuse.
@@ -52,6 +53,15 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 			return true;
 		})
 
+		// Enable sync by default on iOS until we have a mechanism to adjust preferences on-device.
+		UserDefaults.standard.set(NSNumber(value: true), forKey: "syncSettingsViaICloud")
+		UserDefaults.standard.set(NSNumber(value: true), forKey: "syncClippingsViaICloud")
+
+		flycut.addNotificationForBeginUpdates(with: #selector(self.beginUpdates), withTarget: self)
+		flycut.addNotificationForInsertRows(with: #selector(self.insertRows), withTarget: self)
+		flycut.addNotificationForDeleteRows(with: #selector(self.deleteRows), withTarget: self)
+		flycut.addNotificationForEndUpdates(with: #selector(self.endUpdates), withTarget: self)
+
 		flycut.awake(fromNibDisplaying: 10, withDisplayLength: 140, withSave: #selector(savePreferences(toDict:)), forTarget: self) // The 10 isn't used in iOS right now and 140 characters seems to be enough to cover the width of the largest screen.
 
 		NotificationCenter.default.addObserver(self, selector: #selector(self.checkForClippingAddedToClipboard), name: .UIPasteboardChanged, object: nil)
@@ -61,6 +71,69 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
 	func savePreferences(toDict: NSMutableDictionary)
 	{
+	}
+
+	func beginUpdates()
+	{
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { beginUpdates() }
+			return
+		}
+
+			print("Begin updates")
+			print("Num rows: \(tableView.dataSource?.tableView(tableView, numberOfRowsInSection: 0))")
+			if ( 0 == activeUpdates )
+			{
+				if (/*IS_IPAD &&
+					SYSTEM_VERSION >= 9.0 &&*/
+					tableView.dataSource?.numberOfSections!(in: tableView) == 1
+						&& tableView.dataSource?.tableView(tableView, numberOfRowsInSection: 0) == 0 )
+				{
+					tableView.reloadData()
+					print("RL Num rows: \(tableView.dataSource?.tableView(tableView, numberOfRowsInSection: 0))")
+				}
+				tableView.beginUpdates()
+			}
+			activeUpdates += 1
+	}
+
+	@objc func insertRows(row: NSNumber?)
+	{
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { insertRows(row: row) }
+			return
+		}
+			print("Insert row \(row?.intValue)")
+			tableView.insertRows(at: [IndexPath(row: (row?.intValue)!, section: 0)], with: .none)
+	}
+
+	@objc func deleteRows(row: NSNumber?)
+	{
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { deleteRows(row: row) }
+			return
+		}
+			print("Delete row \(row?.intValue)")
+			tableView.deleteRows(at: [IndexPath(row: (row?.intValue)!, section: 0)], with: .none)
+	}
+
+	func endUpdates()
+	{
+		if ( !Thread.isMainThread )
+		{
+			DispatchQueue.main.sync { endUpdates() }
+			return
+		}
+
+			print("End updates");
+			activeUpdates -= 1;
+			if ( 0 == activeUpdates )
+			{
+				tableView.endUpdates()
+			}
 	}
 
 	func checkForClippingAddedToClipboard()

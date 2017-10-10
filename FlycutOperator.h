@@ -31,6 +31,15 @@
 	int displayNum;
 	int displayLength;
 
+	SEL beginUpdatesSelector;
+	id beginUpdatesTarget;
+	SEL insertRowsSelector;
+	id insertRowsTarget;
+	SEL deleteRowsSelector;
+	id deleteRowsTarget;
+	SEL endUpdatesSelector;
+	id endUpdatesTarget;
+
 	NSArray *settingsSyncList;
 
     BOOL disableStore;
@@ -74,7 +83,10 @@
 // Initialization / cleanup related
 -(void)applicationWillTerminate;;
 -(void)awakeFromNibDisplaying:(int) displayNum withDisplayLength:(int) displayLength withSaveSelector:(SEL) selector forTarget:(NSObject*) target;
--(void)initializeStoresAndLoadContents;
+-(void)addNotificationForBeginUpdatesWithSelector:(SEL)aSelector withTarget:(nullable id)aTarget;
+-(void)addNotificationForInsertRowsWithSelector:(SEL)aSelector withTarget:(nullable id)aTarget;
+-(void)addNotificationForDeleteRowsWithSelector:(SEL)aSelector withTarget:(nullable id)aTarget;
+-(void)addNotificationForEndUpdatesWithSelector:(SEL)aSelector withTarget:(nullable id)aTarget;
 
 // Favorites Store related
 -(bool)favoritesStoreIsSelected;

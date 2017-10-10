@@ -88,18 +88,51 @@
 	[self registerOrDeregisterICloudSync];
 }
 
+-(void)addNotificationForBeginUpdatesWithSelector:(SEL)aSelector withTarget:(nullable id)aTarget
+{
+	beginUpdatesSelector = aSelector;
+	beginUpdatesTarget = aTarget;
+}
+
+-(void)addNotificationForInsertRowsWithSelector:(SEL)aSelector withTarget:(nullable id)aTarget
+{
+	insertRowsSelector = aSelector;
+	insertRowsTarget = aTarget;
+}
+
+-(void)addNotificationForDeleteRowsWithSelector:(SEL)aSelector withTarget:(nullable id)aTarget
+{
+	deleteRowsSelector = aSelector;
+	deleteRowsTarget = aTarget;
+}
+
+-(void)addNotificationForEndUpdatesWithSelector:(SEL)aSelector withTarget:(nullable id)aTarget
+{
+	endUpdatesSelector = aSelector;
+	endUpdatesTarget = aTarget;
+}
+
 -(void) initializeStoresAndLoadContents
 {
-	if ( clippingStore ) {
+	if ( nil != beginUpdatesTarget )
+		[beginUpdatesTarget performSelector:beginUpdatesSelector];
+
+	if ( clippingStore && [clippingStore jcListCount] > 0 ) {
+		if ( nil != deleteRowsTarget )
+			for ( int i = [clippingStore jcListCount] ; i > 0 ; i-- )
+				[deleteRowsTarget performSelector:deleteRowsSelector withObject:[NSNumber numberWithInteger:(i-1)]];
+
 		[clippingStore release];
 	}
 	if ( favoritesStore ) {
 		[favoritesStore release];
 	}
+
 	// Fixme - These stores are not released elsewhere.
 	clippingStore = [[FlycutStore alloc] initRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"rememberNum"]
 											  displaying:displayNum
 									   withDisplayLength:displayLength];
+
 	favoritesStore = [[FlycutStore alloc] initRemembering:[[NSUserDefaults standardUserDefaults] integerForKey:@"favoritesRememberNum"]
 											   displaying:displayNum
 										withDisplayLength:displayLength];
@@ -110,6 +143,13 @@
 	if ( [[NSUserDefaults standardUserDefaults] integerForKey:@"savePreference"] >= 1 ) {
 		[self loadEngineFromPList];
 	}
+
+	if ( nil != insertRowsTarget && [clippingStore jcListCount] > 0 )
+		for ( int i = [clippingStore jcListCount] ; i > 0 ; i-- )
+			[insertRowsTarget performSelector:insertRowsSelector withObject:[NSNumber numberWithInteger:(i-1)]];
+
+	if ( nil != endUpdatesTarget )
+		[endUpdatesTarget performSelector:endUpdatesSelector];
 }
 
 -(void) setRememberNum:(int) newRemember
@@ -215,7 +255,7 @@
         }
         // Get text from clipping store.
         [favoritesStore addClipping:[clippingStore clippingAtPosition:stackPosition] ];
-        [clippingStore clearItem:stackPosition];
+        [self clearItemAtStackPosition];
         return YES;
     }
     return NO;
@@ -332,22 +372,41 @@
 -(bool)addClipping:(NSString*)contents ofType:(NSString*)type fromApp:(NSString *)appName withAppBundleURL:(NSString *)bundleURL target:(id)selectorTarget clippingAddedSelector:(SEL)clippingAddedSelector
 {
 	if ( [clippingStore jcListCount] == 0 || ! [contents isEqualToString:[clippingStore clippingContentsAtPosition:0]]) {
+
+		if ( nil != beginUpdatesTarget )
+			[beginUpdatesTarget performSelector:beginUpdatesSelector];
+
         if ( [clippingStore rememberNum] == [clippingStore jcListCount]
             && [[[NSUserDefaults standardUserDefaults] valueForKey:@"saveForgottenClippings"] boolValue] )
         {
             // clippingStore is full, so save the last entry before it gets lost.
             // Set to last item, save, and restore position.
             int savePosition = stackPosition;
-            stackPosition = [clippingStore rememberNum]-1;
+			stackPosition = [clippingStore rememberNum]-1;
+			if ( deleteRowsTarget )
+				[deleteRowsTarget performSelector:deleteRowsSelector withObject:[NSNumber numberWithInteger:(stackPosition)]];
             [self saveFromStackWithPrefix:@"Autosave "];
             stackPosition = savePosition;
         }
 
+		int startingCount = [clippingStore jcListCount];
 		bool success = [clippingStore addClipping:contents
 										   ofType:type
 							 fromAppLocalizedName:appName
 								 fromAppBundleURL:bundleURL
 									  atTimestamp:[[NSDate date] timeIntervalSince1970]];
+		int increase = [clippingStore jcListCount] - startingCount;
+
+		if ( clippingStore != favoritesStore && insertRowsTarget )
+			while ( increase > 0 )
+			{
+			[insertRowsTarget performSelector:insertRowsSelector withObject:[NSNumber numberWithInteger:(stackPosition)]];
+				increase--;
+			}
+
+		if ( nil != endUpdatesTarget )
+			[endUpdatesTarget performSelector:endUpdatesSelector];
+
 //		The below tracks our position down down down... Maybe as an option?
 //		if ( [clippingStore jcListCount] > 1 ) stackPosition++;
 		stackPosition = 0;
@@ -416,7 +475,18 @@
     if ([clippingStore jcListCount] == 0)
         return NO;
 
+	if ( nil != beginUpdatesTarget )
+		[beginUpdatesTarget performSelector:beginUpdatesSelector];
+
     [clippingStore clearItem:stackPosition];
+
+
+	if ( clippingStore != favoritesStore && deleteRowsTarget )
+		[deleteRowsTarget performSelector:deleteRowsSelector withObject:[NSNumber numberWithInteger:(stackPosition)]];
+
+	if ( nil != endUpdatesTarget )
+		[endUpdatesTarget performSelector:endUpdatesSelector];
+
     return YES;
 }
 
