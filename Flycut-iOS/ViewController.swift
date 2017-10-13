@@ -14,6 +14,9 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 	var activeUpdates:Int = 0
 	var tableView:UITableView!
 	var currentAnimation = UITableViewRowAnimation.none
+	var pbCount:Int = -1
+
+	let pasteboardInteractionQueue = DispatchQueue(label: "com.Flycut.pasteboardInteractionQueue")
 
 	// Some buttons we will reuse.
 	var deleteButton:MGSwipeButton? = nil
@@ -145,11 +148,17 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
 	func checkForClippingAddedToClipboard()
 	{
-		let pasteboard = UIPasteboard.general.string
-		if ( nil != pasteboard )
-		{
-			flycut.addClipping(pasteboard, ofType: "public.utf8-plain-text", fromApp: "iOS", withAppBundleURL: "iOS", target: nil, clippingAddedSelector: nil)
+		pasteboardInteractionQueue.async {
+			if ( UIPasteboard.general.changeCount != self.pbCount )
+			{
+				self.pbCount = UIPasteboard.general.changeCount;
 
+				if ( UIPasteboard.general.types.contains("public.utf8-plain-text") )
+				{
+					let pasteboard = UIPasteboard.general.value(forPasteboardType: "public.utf8-plain-text")
+					self.flycut.addClipping(pasteboard as! String!, ofType: "public.utf8-plain-text", fromApp: "iOS", withAppBundleURL: "iOS", target: nil, clippingAddedSelector: nil)
+				}
+			}
 		}
 	}
 
@@ -218,7 +227,24 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 			tableView.deselectRow(at: indexPath, animated: true) // deselect before getPaste since getPaste may reorder the list
 			let content = flycut.getPasteFrom(Int32(indexPath.row))
 			print("Select: \(indexPath.row) \(content) OK")
-			UIPasteboard.general.string = content
+
+			pasteboardInteractionQueue.async {
+				// Capture value before setting the pastboard for reasons noted below.
+				self.pbCount = UIPasteboard.general.changeCount
+
+				// This call will clear all other content types and appears to immediately increment the changeCount.
+				UIPasteboard.general.setValue(content as Any, forPasteboardType: "public.utf8-plain-text")
+
+				// Apple documents that "UIPasteboard waits until the end of the current event loop before incrementing the change count", but this doesn't seem to be the case for the above call.  Handle both scenarios by doing a simple increment if unchanged and an update-to-match if changed.
+				if ( UIPasteboard.general.changeCount == self.pbCount )
+				{
+					self.pbCount += 1
+				}
+				else
+				{
+					self.pbCount = UIPasteboard.general.changeCount
+				}
+			}
 		}
 	}
 }
