@@ -243,6 +243,8 @@
 	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"pasteMovesToTop"] ) {
 		[clippingStore clippingMoveToTop:position];
 		stackPosition = 0;
+
+		[self actionAfterListModification];
 	}
 	return clipping;
 }
@@ -268,6 +270,7 @@
 		// Check to see if they want a little help figuring out what types to enter.
 		if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"revealPasteboardTypes"] )
 			[clippingStore addClipping:type ofType:type fromAppLocalizedName:@"Flycut" fromAppBundleURL:nil atTimestamp:0];
+		[self actionAfterListModification];
 
 		__block bool skipClipping = NO;
 
@@ -384,12 +387,18 @@
 //		if ( [clippingStore jcListCount] > 1 ) stackPosition++;
 		stackPosition = 0;
         [selectorTarget performSelector:clippingAddedSelector];
-		if ( [[NSUserDefaults standardUserDefaults] integerForKey:@"savePreference"] >= 2 )
-            [self saveEngine];
+		[self actionAfterListModification];
 
 		return success;
     }
 	return  NO;
+}
+
+-(void)actionAfterListModification
+{
+	if ( !inhibitSaveEngineAfterListModification
+		&& [[NSUserDefaults standardUserDefaults] integerForKey:@"savePreference"] >= 2 )
+		[self saveEngine];
 }
 
 -(int)jcListCount
@@ -449,6 +458,7 @@
         return NO;
 
 	[clippingStore clearItem:stackPosition];
+	[self actionAfterListModification];
 
     return YES;
 }
@@ -479,11 +489,12 @@
 -(void)clearList
 {
     [clippingStore clearList];
+    [self actionAfterListModification];
 }
 
 -(void)mergeList
 {
-    [clippingStore mergeList];
+	[clippingStore mergeList];
 }
 
 -(BOOL) isValidClippingNumber:(NSNumber *)number {
@@ -528,8 +539,91 @@
 -(NSDictionary*) checkPreferencesChanges:(NSDictionary*)changes
 {
 	if ( [changes valueForKey:@"store"] )
-		[self initializeStoresAndLoadContents];
+	{
+		inhibitSaveEngineAfterListModification = YES;
+
+		[self integrateStoreAtKey:@"jcList" into:clippingStore];
+		[self integrateStoreAtKey:@"favoritesList" into:favoritesStore];
+
+		inhibitSaveEngineAfterListModification = NO;
+		[self actionAfterListModification];
+	}
 	return nil;
+}
+
+-(void) integrateStoreAtKey:(NSString*)listKey into:(FlycutStore*)store
+{
+	FlycutStore *newContent = [self allocInitFlycutStoreRemembering:[clippingStore rememberNum]];
+	NSDictionary *loadDict = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"store"] copy];
+
+	if ( loadDict && [self loadEngineFrom:loadDict key:listKey into:newContent] )
+	{
+		int newCount = [newContent jcListCount];
+		for ( int i = 0 ; i < newCount ; i++ )
+		{
+			FlycutClipping *newClipping = [newContent clippingAtPosition:i];
+			if ( i >= [store jcListCount] )
+			{
+				// Clipping was beyond the end of the store, so just add it.
+				[newClipping setDisplayLength:displayLength];
+				[store insertClipping:newClipping atIndex:i];
+			}
+			else if ( ![newClipping isEqual:[store clippingAtPosition:i]] )
+			{
+				int firstIndex = [store indexOfClipping:newClipping];
+				if ( firstIndex < 0 )
+				{
+					// Clipping wasn't previously in the store, so just add it.
+					[newClipping setDisplayLength:displayLength];
+					[store insertClipping:newClipping atIndex:i];
+				}
+				else if ( [newContent indexOfClipping:[store clippingAtPosition:i]] < 0 )
+				{
+					// Contents in the store at this position didn't exist in the newContent.  Handle deletion.
+					[store clearItem:i];
+					i--;
+				}
+				else if ( [store removeDuplicates] )
+				{
+					if ( i < firstIndex )
+						[store clippingMoveFrom:firstIndex To:i];
+					else
+					{
+						// This can only happen if the remote store allowed duplicates and we do not.  Just delete from the new content and move on.
+						[newContent clearItem:i];
+						i--;
+						newCount--;
+					}
+				}
+				else
+				{
+					[newClipping setDisplayLength:displayLength];
+					[store insertClipping:newClipping atIndex:i];
+				}
+			}
+		}
+		while ( [store jcListCount] > newCount )
+			[store clearItem:newCount];
+
+#ifdef DEBUG
+		[newContent release];
+		newContent = [self allocInitFlycutStoreRemembering:[clippingStore rememberNum]];
+		[self loadEngineFrom:loadDict key:listKey into:newContent];
+		newCount = [newContent jcListCount];
+		if ( newCount != [store jcListCount] )
+			NSLog(@"Error in integrateStoreAtKey with mismatching after counts!");
+		else
+		{
+			for ( int i = 0 ; i < newCount ; i++ )
+			{
+				if ( ![[store clippingAtPosition:i] isEqual:[newContent clippingAtPosition:i]] )
+					NSLog(@"Error in integrateStoreAtKey with mismatching clippings at index %i!", i);
+			}
+		}
+#endif
+	}
+
+	[newContent release];
 }
 
 -(NSDictionary*) checkPreferencesConflicts:(NSDictionary*)changes
@@ -551,52 +645,37 @@
 	[MJCloudKitUserDefaultsSync checkCloudKitUpdates];
 }
 
+-(bool) loadEngineFrom:(NSDictionary*)loadDict key:(NSString*)listKey into:(FlycutStore*)store
+{
+	NSArray *savedJCList = [loadDict objectForKey:listKey];
+	if ( [savedJCList isKindOfClass:[NSArray class]] ) {
+		// There's probably a nicer way to prevent the range from going out of bounds, but this works.
+		int rangeCap = [savedJCList count] < [store rememberNum] ? [savedJCList count] : [store rememberNum];
+		NSRange loadRange = NSMakeRange(0, rangeCap);
+		NSArray *toBeRestoredClips = [[[savedJCList subarrayWithRange:loadRange] reverseObjectEnumerator] allObjects];
+		for( NSDictionary *aSavedClipping in toBeRestoredClips)
+			[store addClipping:[aSavedClipping objectForKey:@"Contents"]
+							  ofType:[aSavedClipping objectForKey:@"Type"]
+				fromAppLocalizedName:[aSavedClipping objectForKey:@"AppLocalizedName"]
+					fromAppBundleURL:[aSavedClipping objectForKey:@"AppBundleURL"]
+						 atTimestamp:[[aSavedClipping objectForKey:@"Timestamp"] integerValue]];
+		return YES;
+	} else DLog(@"Not array");
+	return NO;
+}
+
 -(bool) loadEngineFromPList
 {
-    NSDictionary *loadDict = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"store"] copy];   
-    NSArray *savedJCList;
-	NSRange loadRange;
+	NSDictionary *loadDict = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"store"] copy];
 
-    int rangeCap;
-
-    if ( loadDict != nil ) {
-
-        savedJCList = [loadDict objectForKey:@"jcList"];
-
-        if ( [savedJCList isKindOfClass:[NSArray class]] ) {
-            int rememberNumPref = [[NSUserDefaults standardUserDefaults] 
-                                   integerForKey:@"rememberNum"];
-            // There's probably a nicer way to prevent the range from going out of bounds, but this works.
-			rangeCap = [savedJCList count] < rememberNumPref ? [savedJCList count] : rememberNumPref;
-			loadRange = NSMakeRange(0, rangeCap);
-            NSArray *toBeRestoredClips = [[[savedJCList subarrayWithRange:loadRange] reverseObjectEnumerator] allObjects];
-            for( NSDictionary *aSavedClipping in toBeRestoredClips)
-				[clippingStore addClipping:[aSavedClipping objectForKey:@"Contents"]
-									ofType:[aSavedClipping objectForKey:@"Type"]
-					  fromAppLocalizedName:[aSavedClipping objectForKey:@"AppLocalizedName"]
-						  fromAppBundleURL:[aSavedClipping objectForKey:@"AppBundleURL"]
-							   atTimestamp:[[aSavedClipping objectForKey:@"Timestamp"] integerValue]];
-
-            // Now for the favorites, same thing.
-            savedJCList =[loadDict objectForKey:@"favoritesList"];
-            if ( [savedJCList isKindOfClass:[NSArray class]] ) {
-            rememberNumPref = [[NSUserDefaults standardUserDefaults]
-                               integerForKey:@"favoritesRememberNum"];
-            rangeCap = [savedJCList count] < rememberNumPref ? [savedJCList count] : rememberNumPref;
-            loadRange = NSMakeRange(0, rangeCap);
-            toBeRestoredClips = [[[savedJCList subarrayWithRange:loadRange] reverseObjectEnumerator] allObjects];
-            for( NSDictionary *aSavedClipping in toBeRestoredClips)
-                [favoritesStore addClipping:[aSavedClipping objectForKey:@"Contents"]
-                                     ofType:[aSavedClipping objectForKey:@"Type"]
-                       fromAppLocalizedName:[aSavedClipping objectForKey:@"AppLocalizedName"]
-                           fromAppBundleURL:[aSavedClipping objectForKey:@"AppBundleURL"]
-                                atTimestamp:[[aSavedClipping objectForKey:@"Timestamp"] integerValue]];
-            }
-        } else DLog(@"Not array");
-        [loadDict release];
-        return YES;
-    }
-    return NO;
+	if ( loadDict != nil ) {
+		bool success = NO;
+		success |= [self loadEngineFrom:loadDict key:@"jcList" into:clippingStore];
+		success |= [self loadEngineFrom:loadDict key:@"favoritesList" into:favoritesStore];
+		[loadDict release];
+		return success;
+	}
+	return NO;
 }
 
 -(bool)setStackPositionToOneLessRecent

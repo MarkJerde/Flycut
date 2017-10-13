@@ -34,6 +34,7 @@
 	NSArray *settingsSyncList;
 
     BOOL disableStore;
+	BOOL inhibitSaveEngineAfterListModification;
 }
 
 // Basic functionality

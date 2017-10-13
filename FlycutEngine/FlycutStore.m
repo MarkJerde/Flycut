@@ -56,10 +56,16 @@
 }
 
 -(int) indexOfClipping:(FlycutClipping*) clipping{
-	if (![jcList containsObject:clipping]) {
+	return [self indexOfClipping:clipping afterIndex:-1];
+}
+
+-(int) indexOfClipping:(FlycutClipping*) clipping afterIndex:(int) after{
+	NSUInteger index = [jcList indexOfObject:clipping
+									 inRange:NSMakeRange(after + 1, [jcList count] - (after + 1) )];
+	if ( NSNotFound == index ) {
 		return -1;
 	}
-	return (int)[jcList indexOfObject:clipping];
+	return (int)index;
 }
 
 // Add a clipping
@@ -88,6 +94,10 @@
 }
 
 -(void) addClipping:(FlycutClipping*) clipping{
+	[self insertClipping:clipping atIndex:0];
+}
+
+-(void) insertClipping:(FlycutClipping*) clipping atIndex:(int) index{
 	[self delegateBeginUpdates];
 
 	int moveFromIndex = -1;
@@ -97,7 +107,7 @@
     }
 
     // Push it onto our recent clippings stack
-	[jcList insertObject:clipping atIndex:0];
+	[jcList insertObject:clipping atIndex:index];
 	if ( moveFromIndex >= 0 )
 		[self delegateMoveClippingAtIndex:moveFromIndex toIndex:index];
 	else

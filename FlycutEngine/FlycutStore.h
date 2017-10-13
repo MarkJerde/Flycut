@@ -62,11 +62,14 @@
 -(NSArray *) previousDisplayStrings:(int)howMany;
 -(NSArray *) previousDisplayStrings:(int)howMany containing:(NSString*)search;
 -(NSArray *) previousIndexes:(int)howMany containing:(NSString*)search; // This method is in newest-first order.
+-(int) indexOfClipping:(FlycutClipping*) clipping;
 -(int) indexOfClipping:(NSString *)clipping ofType:(NSString *)type fromAppLocalizedName:(NSString *)appLocalizedName fromAppBundleURL:(NSString *)bundleURL atTimestamp:(int) timestamp;
+-(bool) removeDuplicates;
 
 // Add a clipping
 -(bool) addClipping:(NSString *)clipping ofType:(NSString *)type fromAppLocalizedName:(NSString *)appLocalizedName fromAppBundleURL:(NSString *)bundleURL atTimestamp:(int) timestamp;
 -(void) addClipping:(FlycutClipping*) clipping;
+-(void) insertClipping:(FlycutClipping*) clipping atIndex:(int) index;
 
 // Delete a clipping
 -(void) clearItem:(int)index;
@@ -79,6 +82,7 @@
 
 // Move the clipping at index to the top
 -(void) clippingMoveToTop:(int)index;
+-(void) clippingMoveFrom:(int)index To:(int)toIndex;
 
 /** optional delegate (not retained) */
 @property (nonatomic, nullable, assign) id<FlycutStoreDelegate> delegate;
