@@ -61,188 +61,175 @@ static NSString *subscriptionID = @"UserDefaultSubscription";
 static NSString *recordType = @"UserDefault";
 static NSString *recordName = @"UserDefaults";
 
-// Flow controls.  It would be nice to replace these with GCD, but CloudKit's async completions complicate this so we have these for now.
-static BOOL oneAutomaticUpdateToICloudAfterUpdateFromICloud = NO;
-static BOOL oneAutomaticUpdateFromICloudAfterUpdateToICloud = NO;
+// Flow controls.
 static BOOL refuseUpdateToICloudUntilAfterUpdateFromICloud = NO;
-static BOOL oneTimeDeleteZoneFromICloud = NO;
-static BOOL updatingToICloud = NO;
-static BOOL updatingFromICloud = NO;
+static BOOL oneTimeDeleteZoneFromICloud = NO; // To clear the user's sync data from iCloud for testing first-time scenario.
+static dispatch_queue_t syncQueue = nil;
+static dispatch_queue_t pollQueue = nil;
 
-static int lastKnownLaunches = -1;
-//static int additions = 0, changes = 0;
 @implementation MJCloudKitUserDefaultsSync
 
 +(void) updateToiCloud:(NSNotification*) notificationObject {
-	DLog(@"Update to iCloud?");
-	if ( updatingToICloud || updatingFromICloud || refuseUpdateToICloudUntilAfterUpdateFromICloud )
-	{
-		if ( updatingToICloud )
-			DLog(@"NO.  Already updating to iCloud");
-		if ( updatingFromICloud )
-		{
-			DLog(@"NO.  Currently updating from iCloud");
-			oneAutomaticUpdateToICloudAfterUpdateFromICloud = YES;
-		}
+	dispatch_async(syncQueue, ^{
+		DLog(@"Update to iCloud?");
 		if ( refuseUpdateToICloudUntilAfterUpdateFromICloud )
+		{
 			DLog(@"NO.  Waiting until after update from iCloud");
-	}
-	else
-	{
-		updatingToICloud = YES;
-		DLog(@"YES.  Updating to iCloud");
-		[privateDB fetchRecordWithID:recordID completionHandler:^(CKRecord *record, NSError *error) {
-			if (error
-				&& !( nil != [error.userInfo objectForKey:@"ServerErrorDescription" ]
-					 && [(NSString*)[error.userInfo objectForKey:@"ServerErrorDescription" ] isEqualToString:@"Record not found"	] ) ) {
-					// Error handling for failed fetch from public database
-					DLog(@"CloudKit Fetch failure: %@", error.localizedDescription);
-					updatingToICloud = NO;
-				}
-			else {
-				DLog(@"Updating to iCloud completion");
-				// Modify the record and save it to the database
-
-				BOOL needToReleaseRecord = NO;
+		}
+		else
+		{
+			DLog(@"YES.  Updating to iCloud");
+			dispatch_suspend(syncQueue);
+			[privateDB fetchRecordWithID:recordID completionHandler:^(CKRecord *record, NSError *error) {
 				if (error
-					&& nil != [error.userInfo objectForKey:@"ServerErrorDescription" ]
-					&& [(NSString*)[error.userInfo objectForKey:@"ServerErrorDescription" ] isEqualToString:@"Record not found"	] )
-				{
-					DLog(@"Updating to iCloud completion creation");
-					record = [[CKRecord alloc] initWithRecordType:recordType recordID:recordID];
-					needToReleaseRecord = YES;
-				}
+					&& !( nil != [error.userInfo objectForKey:@"ServerErrorDescription" ]
+						 && [(NSString*)[error.userInfo objectForKey:@"ServerErrorDescription" ] isEqualToString:@"Record not found"	] ) ) {
+						// Error handling for failed fetch from public database
+						DLog(@"CloudKit Fetch failure: %@", error.localizedDescription);
+						dispatch_resume(syncQueue);
+					}
+				else {
+					DLog(@"Updating to iCloud completion");
+					// Modify the record and save it to the database
 
-				NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-				NSDictionary *dict = [defaults dictionaryRepresentation];
-				if([defaults objectForKey:@"rememberNum"])
-					DLog(@"oh I got it");
-				if([dict objectForKey:@"rememberNum"])
-					DLog(@"you got it");
+					BOOL needToReleaseRecord = NO;
+					if (error
+						&& nil != [error.userInfo objectForKey:@"ServerErrorDescription" ]
+						&& [(NSString*)[error.userInfo objectForKey:@"ServerErrorDescription" ] isEqualToString:@"Record not found"	] )
+					{
+						DLog(@"Updating to iCloud completion creation");
+						record = [[CKRecord alloc] initWithRecordType:recordType recordID:recordID];
+						needToReleaseRecord = YES;
+					}
 
-				__block int additions = 0, modifications = 0;
-				__block NSMutableDictionary *changes = nil;
-				// Maybe we could compare record and dict, creating an array of only the items which are not identical in both.
-				[dict enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-					if ( ( nil != prefix && [key hasPrefix:prefix] )
-						|| ( nil != matchList && [matchList containsObject:key] ) ) {
-						Boolean skip = NO;
+					NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+					NSDictionary *dict = [defaults dictionaryRepresentation];
 
-						if ( [obj isKindOfClass:[NSDictionary class]] )
-						{
-							NSError *error;
-							NSData *data = [NSPropertyListSerialization dataWithPropertyList:obj format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
-							if ( data )
-								obj = data;
+					__block int additions = 0, modifications = 0;
+					__block NSMutableDictionary *changes = nil;
+					// Maybe we could compare record and dict, creating an array of only the items which are not identical in both.
+					[dict enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+						if ( ( nil != prefix && [key hasPrefix:prefix] )
+							|| ( nil != matchList && [matchList containsObject:key] ) ) {
+							Boolean skip = NO;
+
+							if ( [obj isKindOfClass:[NSDictionary class]] )
+							{
+								NSError *error;
+								NSData *data = [NSPropertyListSerialization dataWithPropertyList:obj format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
+								if ( data )
+									obj = data;
+								else
+								{
+									DLog( @"Error serializing %@ to binary: %@", key, error );
+									skip = YES;
+								}
+							}
+
+							if ( skip )
+							{
+							}
+							else if ( nil == [record objectForKey: key] )
+							{
+								DLog(@"Adding %@.", key);
+								additions++;
+							}
+							else if ( ( [obj isKindOfClass:[NSNumber class]] && [(NSNumber*)record[key] intValue] != [(NSNumber*)obj intValue] )
+									 || ( [obj isKindOfClass:[NSString class]] && ![(NSString*)obj isEqualToString:(NSString*)record[key]] )
+									 || ( [obj isKindOfClass:[NSData class]] && ![(NSData*)obj isEqualToData:(NSData*)record[key]] ) )
+							{
+								DLog(@"Changing %@.", key);
+								modifications++;
+							}
 							else
 							{
-								DLog( @"Error serializing %@ to binary: %@", key, error );
+								DLog(@"Skipping %@.", key);
 								skip = YES;
 							}
-						}
 
-						if ( skip )
-						{
-						}
-						else if ( nil == [record objectForKey: key] )
-						{
-							DLog(@"Adding %@.", key);
-							additions++;
-						}
-						else if ( ( [obj isKindOfClass:[NSNumber class]] && [(NSNumber*)record[key] intValue] != [(NSNumber*)obj intValue] )
-								 || ( [obj isKindOfClass:[NSString class]] && ![(NSString*)obj isEqualToString:(NSString*)record[key]] )
-								 || ( [obj isKindOfClass:[NSData class]] && ![(NSData*)obj isEqualToData:(NSData*)record[key]] ) )
-						{
-							DLog(@"Changing %@.", key);
-							modifications++;
-						}
-						else
-						{
-							DLog(@"Skipping %@.", key);
-							skip = YES;
-						}
+							if ( !skip )
+							{
+								if ( !changes )
+									changes = [[NSMutableDictionary alloc] init];
 
-						if ( !skip )
-						{
-							if ( !changes )
-								changes = [[NSMutableDictionary alloc] init];
+								NSMutableArray *fromToTheirs = [[NSMutableArray alloc] init];
+								[fromToTheirs addObject:record[key]];
+								[fromToTheirs addObject:obj];
+								[changes setObject:fromToTheirs forKey:key];
 
-							NSMutableArray *fromToTheirs = [[NSMutableArray alloc] init];
-							[fromToTheirs addObject:record[key]];
-							[fromToTheirs addObject:obj];
-							[changes setObject:fromToTheirs forKey:key];
-
-							record[key] = obj;
+								record[key] = obj;
+							}
 						}
-					}
-				}];
-				DLog(@"To iCloud: Adding %i keys.  Modifying %i keys.", additions, modifications);
+					}];
+					DLog(@"To iCloud: Adding %i keys.  Modifying %i keys.", additions, modifications);
 
-				if ( additions + modifications > 0 )
-				{
-					[privateDB saveRecord:record completionHandler:^(CKRecord *savedRecord, NSError *saveError) {
-						DLog(@"Saving to iCloud.");
-						if ( saveError )
-						{
-							// Error handling for failed save to public database
-							DLog(@"CloudKit Save failure: %@", saveError.localizedDescription);
+					if ( additions + modifications > 0 )
+					{
+						[privateDB saveRecord:record completionHandler:^(CKRecord *savedRecord, NSError *saveError) {
+							DLog(@"Saving to iCloud.");
+							if ( saveError )
+							{
+								// Error handling for failed save to public database
+								DLog(@"CloudKit Save failure: %@", saveError.localizedDescription);
 
-							[privateDB fetchRecordWithID:recordID completionHandler:^(CKRecord *newRecord, NSError *error) {
-								if (error) {
+								[privateDB fetchRecordWithID:recordID completionHandler:^(CKRecord *newRecord, NSError *error) {
+									if (error) {
 										// Error handling for failed fetch from public database
 										DLog(@"CloudKit Fetch failure: %@", error.localizedDescription);
-										updatingToICloud = NO;
-								}
-								else {
-									DLog(@"Updating to iCloud completion");
-
-									[changes enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
-										[obj addObject:[newRecord objectForKey:key]];
-									}];
-
-									NSDictionary *corrections = [self sendNotificationsFor:MJSyncNotificationConflicts onKeys:changes];
-
-									if ( corrections && [corrections count] )
-									{
-										[corrections enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
-											newRecord[key] = obj;
-										}];
-										[corrections release];
-
-										[privateDB saveRecord:newRecord completionHandler:^(CKRecord *savedRecord, NSError *saveError) {
-											DLog(@"Saving to iCloud.");
-											if ( saveError )
-											{
-												// If we had a conflict on the conflict resolution, just give up for now.
-												DLog(@"CloudKit conflict-resolution Save failure: %@", saveError.localizedDescription);
-											}
-
-											[self completeUpdateToiCloudWithChanges:changes];
-										}];
-									}
-									else
 										[self completeUpdateToiCloudWithChanges:changes];
-								}
-							}];
-						}
-						else
-							[self completeUpdateToiCloudWithChanges:changes];
-					}];
-				}
-				else
-					[self completeUpdateToiCloudWithChanges:changes];
+									}
+									else {
+										DLog(@"Updating to iCloud completion");
 
-				// If the record wasn't found, so we had to create it, then we own it and better release it.
-				if ( needToReleaseRecord )
-					[record release];
-			}
-		}];
-	}
+										[changes enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
+											[obj addObject:[newRecord objectForKey:key]];
+										}];
+
+										NSDictionary *corrections = [self sendNotificationsFor:MJSyncNotificationConflicts onKeys:changes];
+
+										if ( corrections && [corrections count] )
+										{
+											[corrections enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
+												newRecord[key] = obj;
+											}];
+											[corrections release];
+
+											[privateDB saveRecord:newRecord completionHandler:^(CKRecord *savedRecord, NSError *saveError) {
+												DLog(@"Saving to iCloud.");
+												if ( saveError )
+												{
+													// If we had a conflict on the conflict resolution, just give up for now.
+													DLog(@"CloudKit conflict-resolution Save failure: %@", saveError.localizedDescription);
+												}
+
+												[self completeUpdateToiCloudWithChanges:changes];
+											}];
+										}
+										else
+											[self completeUpdateToiCloudWithChanges:changes];
+									}
+								}];
+							}
+							else
+								[self completeUpdateToiCloudWithChanges:changes];
+						}];
+					}
+					else
+						[self completeUpdateToiCloudWithChanges:changes];
+
+					// If the record wasn't found, so we had to create it, then we own it and better release it.
+					if ( needToReleaseRecord )
+						[record release];
+				}
+			}];
+		}
+	});
 }
 
 +(void) completeUpdateToiCloudWithChanges:(NSMutableDictionary*) changes
 {
-	updatingToICloud = NO;
+	// Resume before releasing memory, since there's nothing shared about the memory.
+	dispatch_resume(syncQueue);
 
 	if ( changes )
 	{
@@ -251,40 +238,19 @@ static int lastKnownLaunches = -1;
 		}];
 		[changes release];
 	}
-
-	if ( oneAutomaticUpdateFromICloudAfterUpdateToICloud )
-	{
-		oneAutomaticUpdateFromICloudAfterUpdateToICloud = NO;
-		[self updateFromiCloud:nil];
-	}
 }
 
 +(void) updateFromiCloud:(NSNotification*) notificationObject {
-	DLog(@"Update from iCloud?");
-	if ( updatingToICloud || updatingFromICloud )
-	{
-		if ( updatingFromICloud )
-			DLog(@"NO.  Already updating from iCloud");
-		if ( updatingToICloud )
-		{
-			DLog(@"NO.  Currently updating to iCloud");
-			oneAutomaticUpdateFromICloudAfterUpdateToICloud = YES;
-		}
-	}
-	else
-	{
-		updatingFromICloud = YES;
+	dispatch_async(syncQueue, ^{
 		DLog(@"Updating from iCloud");
+		dispatch_suspend(syncQueue);
 		[privateDB fetchRecordWithID:recordID completionHandler:^(CKRecord *record, NSError *error) {
 			if (error) {
 				// Error handling for failed fetch from public database
 				DLog(@"CloudKit Fetch failure: %@", error.localizedDescription);
-				updatingFromICloud = NO;
 			}
 			else {
 				DLog(@"Updating from iCloud completion");
-				//NSUbiquitousKeyValueStore *iCloudStore = [NSUbiquitousKeyValueStore defaultStore];
-				//NSDictionary *dict = [iCloudStore dictionaryRepresentation];
 
 				// prevent NSUserDefaultsDidChangeNotification from being posted while we update from iCloud
 				[[NSNotificationCenter defaultCenter] removeObserver:self
@@ -385,16 +351,10 @@ static int lastKnownLaunches = -1;
 														   object:nil];
 
 				refuseUpdateToICloudUntilAfterUpdateFromICloud = NO;
-				updatingFromICloud = NO;
 			}
-
-			if ( oneAutomaticUpdateToICloudAfterUpdateFromICloud )
-			{
-				oneAutomaticUpdateToICloudAfterUpdateFromICloud = NO;
-				[self updateToiCloud:nil];
-			}
+			dispatch_resume(syncQueue);
 		}];
-	}
+	});
 }
 
 +(void) setRemoteNotificationsEnabled:(bool) enabled
@@ -416,25 +376,12 @@ static int lastKnownLaunches = -1;
 	// If we are already running and add criteria while updating to iCloud, we could push to iCloud before pulling the existing value from iCloud.  Avoid this by dispatching into another thread that will wait pause existing activity and wait for it to stop before adding new criteria.
 	dispatch_async(dispatch_get_main_queue(), ^{
 		DLog(@"Actually starting with prefix");
-		while ( observingActivity || observingIdentityChanges || updatingFromICloud || updatingToICloud )
-		{
-			NSLog(@"Waiting for other sync to finish.");
-			[self pause];
-			[NSThread sleepForTimeInterval:0.1];
-			NSLog(@"Waited for other sync to finish.");
-		}
-
-		if ( databaseContainerIdentifier )
-			[databaseContainerIdentifier release];
-		databaseContainerIdentifier = containerIdentifier;
-		[databaseContainerIdentifier retain];
+		[self commonStartInitialStepsOnContainerIdentifier:containerIdentifier];
 
 		if ( prefix )
 			[prefix release];
 		prefix = prefixToSync;
 		[prefix retain];
-
-		refuseUpdateToICloudUntilAfterUpdateFromICloud = YES;
 
 		[self attemptToEnable];
 	});
@@ -446,18 +393,7 @@ static int lastKnownLaunches = -1;
 	// If we are already running and add criteria while updating to iCloud, we could push to iCloud before pulling the existing value from iCloud.  Avoid this by dispatching into another thread that will wait pause existing activity and wait for it to stop before adding new criteria.
 	dispatch_async(dispatch_get_main_queue(), ^{
 		NSLog(@"Actually starting with match list length %lu atop %lu", (unsigned long)[keyMatchList count], (unsigned long)[matchList count]);
-		while ( observingActivity || observingIdentityChanges || updatingFromICloud || updatingToICloud )
-		{
-			NSLog(@"Waiting for other sync to finish.");
-			[self pause];
-			[NSThread sleepForTimeInterval:0.1];
-			NSLog(@"Waited for other sync to finish.");
-		}
-
-		if ( databaseContainerIdentifier )
-			[databaseContainerIdentifier release];
-		databaseContainerIdentifier = containerIdentifier;
-		[databaseContainerIdentifier retain];
+		[self commonStartInitialStepsOnContainerIdentifier:containerIdentifier];
 
 		if ( !matchList )
 			matchList = [[NSArray alloc] init];
@@ -473,10 +409,28 @@ static int lastKnownLaunches = -1;
 
 		NSLog(@"Match list length is now %lu", (unsigned long)[matchList count]);
 
-		refuseUpdateToICloudUntilAfterUpdateFromICloud = YES;
-
 		[self attemptToEnable];
 	});
+}
+
++(void) commonStartInitialStepsOnContainerIdentifier:(NSString*) containerIdentifier {
+	[self pause];
+
+	NSLog(@"Waiting for sync queue to clear before adding new criteria.");
+	if ( !syncQueue )
+	{
+		syncQueue = dispatch_queue_create("com.MJCloudKitUserDefaultsSync.queue", DISPATCH_QUEUE_SERIAL);
+		[syncQueue retain];
+	}
+	dispatch_sync(syncQueue, ^{
+		refuseUpdateToICloudUntilAfterUpdateFromICloud = YES;
+		NSLog(@"Waited for sync queue to clear before adding new criteria.");
+	});
+
+	if ( databaseContainerIdentifier )
+		[databaseContainerIdentifier release];
+	databaseContainerIdentifier = containerIdentifier;
+	[databaseContainerIdentifier retain];
 }
 
 +(void) pause {
@@ -601,7 +555,6 @@ static int lastKnownLaunches = -1;
 			case CKAccountStatusAvailable:  // is iCloud enabled
 				DLog(@"iCloud Available");
 				[self startObservingActivity];
-				//[self incrementCloudKitRecordOfType:@"LaunchCounter" named:@"LaunchCounter" atKey:@"launches"];
 				break;
 
 			case CKAccountStatusNoAccount:
@@ -685,8 +638,8 @@ static int lastKnownLaunches = -1;
 				// Pull from iCloud now, pushing afterward.
 				// If we push first, we overwrite the sync.
 				// If we don't push after the pull, we won't push until something changes.
-				oneAutomaticUpdateToICloudAfterUpdateFromICloud = YES;
 				[self updateFromiCloud:nil];
+				[self updateToiCloud:nil];
 			}
 
 		};
@@ -717,18 +670,22 @@ static int lastKnownLaunches = -1;
 
 	if ( nil == subscription )
 	{
-		DLog(@"Using polling instead.");
 		// CKQuerySubscription was added after the core CloudKit APIs, so on OS versions that don't support it we will poll instead as there appears to be no alternative subscription API.
+		DLog(@"Using polling instead.");
 
-		// Some acrobatics are required to get the timer working.  Without being contained in the dispatch_async, it would never fire on its own, even if added to the NSRunLoop mainRunLoop.
+		if ( !pollQueue )
+		{
+			pollQueue = dispatch_queue_create("com.MJCloudKitUserDefaultsSync.poll", DISPATCH_QUEUE_SERIAL);
+			[pollQueue retain];
+		}
+
+		// Timers attach to the run loop of the process, which isn't present on all processes, so we must dispatch to the main queue to ensure we have a run loop for the timer.
 		dispatch_async(dispatch_get_main_queue(), ^{
 			pollCloudKitTimer = [[NSTimer scheduledTimerWithTimeInterval:(1.0)
 																  target:self
 																selector:@selector(pollCloudKit:)
 																userInfo:nil
 																 repeats:YES] retain];
-
-			[pollCloudKitTimer fire];
 		});
 	}
 	else
@@ -832,69 +789,49 @@ static int lastKnownLaunches = -1;
 	}
 }
 
+bool alreadyPolling = NO;
 +(void)pollCloudKit:(NSTimer *)timer {
-	// CKFetchRecordChangesOperation is OS X 10.10 to 10.12, but CKQuerySubscription is 10.12+ so for code exclusive to our pre-CKQuerySubscription support we can use things that were deprecated when CKQuerySubscription was added.
-	// We will have to revisit this ^ since Push Notifications is only allowed if distributed through the App Store and CKQuerySubscription depends on Push Notifications.
-	DLog(@"Polling");
-	CKFetchRecordChangesOperation *operation = [[CKFetchRecordChangesOperation alloc] initWithRecordZoneID:recordZone.zoneID previousServerChangeToken:previousChangeToken];
-	operation.recordChangedBlock = ^(CKRecord *record) {
-		DLog(@"Polling got record change");
-		[self checkCloudKitUpdates];
-	};
-	operation.fetchRecordChangesCompletionBlock = ^(CKServerChangeToken * _Nullable serverChangeToken, NSData * _Nullable clientChangeTokenData, NSError * _Nullable operationError) {
-		DLog(@"Polling completion");
-		if ( nil == operationError )
+	// The fetchRecordChangesCompletionBlock below doesn't get called until after the recordChangedBlock below completes.  The former block provides the change token which the poll uses to identify if changes have happened.  Prevent use of the old change token while processing changes, which would of course detect changes and cause excess evaluation, by setting / checking a flag in a serial queue until the completion block which occurs on a different queue causes it to be cleared in the original serial queue.
+	// This is preferable to using a dispatch_suspend / dispatch_resume because it prevents amassing a long queue of serial GCD operations in the event that the CloudKit CKFetchRecordChangesOperation takes more than the polling interval.
+
+	dispatch_async(pollQueue, ^{
+		if ( !alreadyPolling )
 		{
-			DLog(@"Polling completion GOOD");
-			if ( previousChangeToken )
-				[previousChangeToken release];
-			previousChangeToken = serverChangeToken;
-			[previousChangeToken retain];
-			if(clientChangeTokenData)
-				[clientChangeTokenData release];
-		}
-	};
+			DLog(@"Polling");
+			alreadyPolling = YES;
 
-	[privateDB addOperation:operation];
-	[operation release];
+			// CKFetchRecordChangesOperation is OS X 10.10 to 10.12, but CKQuerySubscription is 10.12+ so for code exclusive to our pre-CKQuerySubscription support we can use things that were deprecated when CKQuerySubscription was added.
+			// We will have to revisit this ^ since Push Notifications is only allowed if distributed through the App Store and CKQuerySubscription depends on Push Notifications.
 
-	/*CKFetchRecordZonesOperation *operation = [[CKFetchRecordZonesOperation alloc] initWithRecordZoneIDs:recordZoneID];
-	operation.fetchAllRecordZonesOperation*/
-	/*let predicate = NSPredicate(format: "UPC = %@", subStr)
+			CKFetchRecordChangesOperation *operation = [[CKFetchRecordChangesOperation alloc] initWithRecordZoneID:recordZone.zoneID previousServerChangeToken:previousChangeToken];
 
-	let query = CKQuery(recordType: "Food", predicate: predicate)
+			operation.recordChangedBlock = ^(CKRecord *record) {
+				DLog(@"Polling got record change");
+				[self checkCloudKitUpdates];
+			};
 
-	publicDatabase.performQuery(query, inZoneWithID: nil,
-								completionHandler:*/
-}
+			operation.fetchRecordChangesCompletionBlock = ^(CKServerChangeToken * _Nullable serverChangeToken, NSData * _Nullable clientChangeTokenData, NSError * _Nullable operationError) {
+				DLog(@"Polling completion");
+				if ( nil == operationError )
+				{
+					DLog(@"Polling completion GOOD");
+					if ( previousChangeToken )
+						[previousChangeToken release];
+					previousChangeToken = serverChangeToken;
+					[previousChangeToken retain];
+					if(clientChangeTokenData)
+						[clientChangeTokenData release];
+				}
 
-+(void) incrementCloudKitRecordOfType:(NSString*) recordType named:(NSString*) recordName atKey:(NSString*) recordKey onDB:(CKDatabase*) database {
-	NSLog(@"SHOULD NOT BE CALLED");
-	CKRecordID *recordID = [[CKRecordID alloc] initWithRecordName:recordName];
-	[database fetchRecordWithID:recordID completionHandler:^(CKRecord *record, NSError *error) {
-		if(error) {
-			NSLog(@"%@", error);
-			record = [[CKRecord alloc] initWithRecordType:recordType recordID:recordID];
-			[record setValue:@"0" forKey:recordKey];
-		} else {
-			NSLog(@"Fetched successfully");
-		}
+				// Back to the pollQueue to clear the flag since we are now on a different queue.
+				dispatch_async(pollQueue, ^{
+					alreadyPolling = NO;
+				});
+			};
 
-		int value = [(NSNumber*)record[recordKey] intValue];
-		value++;
-		lastKnownLaunches = value;
-		record[recordKey] = [NSNumber numberWithInt:value];
-		NSLog(@"%i %@!",value, recordKey);
-
-		[database saveRecord:record completionHandler:^(CKRecord *record, NSError *error) {
-			if(error) {
-				NSLog(@"Uh oh, there was an error updating ... %@", error);
-				[self stopObservingActivity];
-			} else {
-				NSLog(@"Updated record successfully");
-			}
-		}];
-	}];
+			[privateDB addOperation:operation];
+			[operation release];		}
+	});
 }
 
 + (void) dealloc {
