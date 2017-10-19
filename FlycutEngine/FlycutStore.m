@@ -210,6 +210,11 @@
     }
 }
 
+-(void) clearModifiedSinceLastSaveStore
+{
+	modifiedSinceLastSaveStore = NO;
+}
+
 -(int) rememberNum
 {
     return jcRememberNum;
@@ -223,6 +228,11 @@
 -(int) jcListCount
 {
     return [jcList count];
+}
+
+-(bool) modifiedSinceLastSaveStore
+{
+	return modifiedSinceLastSaveStore;
 }
 
 -(FlycutClipping *) clippingAtPosition:(int)index
@@ -365,24 +375,28 @@
 
 -(void) delegateInsertClippingAtIndex:(int)index
 {
+	modifiedSinceLastSaveStore = YES;
 	if ( self.delegate && [self.delegate respondsToSelector:@selector(insertClippingAtIndex:)] )
 		[self.delegate insertClippingAtIndex:index];
 }
 
 -(void) delegateDeleteClippingAtIndex:(int)index
 {
+	modifiedSinceLastSaveStore = YES;
 	if ( self.delegate && [self.delegate respondsToSelector:@selector(deleteClippingAtIndex:)] )
 		[self.delegate deleteClippingAtIndex:index];
 }
 
 -(void) delegateReloadClippingAtIndex:(int)index
 {
+	modifiedSinceLastSaveStore = YES;
 	if ( self.delegate && [self.delegate respondsToSelector:@selector(reloadClippingAtIndex:)] )
 		[self.delegate reloadClippingAtIndex:index];
 }
 
 -(void) delegateMoveClippingAtIndex:(int)index toIndex:(int)newIndex
 {
+	modifiedSinceLastSaveStore = YES;
 	if ( self.delegate && [self.delegate respondsToSelector:@selector(moveClippingAtIndex:toIndex:)] )
 		[self.delegate moveClippingAtIndex:index toIndex:newIndex];
 }
