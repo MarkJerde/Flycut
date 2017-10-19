@@ -112,6 +112,7 @@
 
 	// Initialize the FlycutOperator
 	flycutOperator = [[FlycutOperator alloc] init];
+	flycutOperator.delegate = self;
 	[flycutOperator setClippingsStoreDelegate:self];
 	[flycutOperator setFavoritesStoreDelegate:self];
 	[flycutOperator awakeFromNibDisplaying:[[NSUserDefaults standardUserDefaults] integerForKey:@"displayNum"]
@@ -1078,20 +1079,6 @@ didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
 		}
 	}
 
-	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"syncClippingsViaICloud"] ) {
-		NSAlert *alert = [[NSAlert alloc] init];
-		[alert setMessageText:@"Warning"];
-		[alert addButtonWithTitle:@"Ok"];
-		[alert addButtonWithTitle:@"Cancel"];
-		[alert setInformativeText:@"Enabling iCloud Clippings Sync will overwrite local clippings if your iCloud account already has Flycut clippings.  If you have never enabled this in Flycut on any computer, your current clippings will be retained and loaded into iCloud."];
-		if ( [alert runModal] != NSAlertFirstButtonReturn )
-		{
-			[[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithBool:NO]
-													 forKey:@"syncClippingsViaICloud"];
-		}
-		// Add option to overwrite iCloud.
-	}
-
 	[self registerOrDeregisterICloudSync];
 }
 
@@ -1280,6 +1267,19 @@ didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
 		[self setHotKeyPreferenceForRecorder: aRecorder];
 	}
 	DLog(@"code: %ld, flags: %lu", (long)newKeyCombo.code, (unsigned long)newKeyCombo.flags);
+}
+
+- (NSString*)alertWithMessageText:(NSString*)message informationText:(NSString*)information buttonsTexts:(NSArray*)buttons {
+	NSAlert *alert = [[NSAlert alloc] init];
+	[alert setMessageText:message];
+	[buttons enumerateObjectsUsingBlock:^(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+		[alert addButtonWithTitle:obj];
+	}];
+	[alert setInformativeText:information];
+	NSInteger result = [alert runModal];
+	if ( result < NSAlertFirstButtonReturn || result >= NSAlertFirstButtonReturn + [buttons count] )
+		return nil;
+	return buttons[result - NSAlertFirstButtonReturn];
 }
 
 - (void)beginUpdates {
