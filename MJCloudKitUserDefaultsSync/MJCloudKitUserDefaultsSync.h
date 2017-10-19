@@ -44,10 +44,11 @@
 
 typedef NS_ENUM(NSUInteger, MJSyncNotificationType) {
 	MJSyncNotificationChanges = 0,
-	MJSyncNotificationConflicts
+	MJSyncNotificationConflicts,
+	MJSyncNotificationSaveSuccess
 };
 static inline MJSyncNotificationType MJSyncNotificationTypeFirst() { return MJSyncNotificationChanges; }
-static inline MJSyncNotificationType MJSyncNotificationTypeLast() { return MJSyncNotificationConflicts; }
+static inline MJSyncNotificationType MJSyncNotificationTypeLast() { return MJSyncNotificationSaveSuccess; }
 
 @interface MJCloudKitUserDefaultsSync : NSObject
 

@@ -43,8 +43,9 @@ static NSString *databaseContainerIdentifier = nil;
 static CKRecordZone *recordZone = nil;
 static CKRecordZoneID *recordZoneID = nil;
 static CKRecordID *recordID = nil;
-static NSMutableArray *changeNotificationHandlers[] = {nil,nil};
+static NSMutableArray *changeNotificationHandlers[] = {nil,nil,nil};
 static CKServerChangeToken *previousChangeToken = nil;
+static NSString *lastUpdateRecordChangeTagReceived = nil;
 
 // Things we don't retain.
 static CKDatabase *publicDB;
@@ -78,6 +79,11 @@ static dispatch_queue_t pollQueue = nil;
 		}
 		else
 		{
+			if ( nil == privateDB )
+			{
+				DLog(@"Database has been unset.  Not updating to iCloud");
+				return;
+			}
 			DLog(@"YES.  Updating to iCloud");
 			dispatch_suspend(syncQueue);
 			[privateDB fetchRecordWithID:recordID completionHandler:^(CKRecord *record, NSError *error) {
@@ -88,6 +94,14 @@ static dispatch_queue_t pollQueue = nil;
 						DLog(@"CloudKit Fetch failure: %@", error.localizedDescription);
 						dispatch_resume(syncQueue);
 					}
+				else if ( ![[record recordChangeTag] isEqualToString:lastUpdateRecordChangeTagReceived] ) {
+					// We won't push our content if there is something we haven't received yet.
+
+					// Pull from iCloud now, pushing afterward.
+					[self updateFromiCloud:nil];
+					[self updateToiCloud:nil];
+					dispatch_resume(syncQueue);
+				}
 				else {
 					DLog(@"Updating to iCloud completion");
 					// Modify the record and save it to the database
@@ -113,17 +127,11 @@ static dispatch_queue_t pollQueue = nil;
 							|| ( nil != matchList && [matchList containsObject:key] ) ) {
 							Boolean skip = NO;
 
-							if ( [obj isKindOfClass:[NSDictionary class]] )
+							if ( nil != obj )
 							{
-								NSError *error;
-								NSData *data = [NSPropertyListSerialization dataWithPropertyList:obj format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
-								if ( data )
-									obj = data;
-								else
-								{
-									DLog( @"Error serializing %@ to binary: %@", key, error );
+								obj = [self serialize:obj forKey:key];
+								if ( nil == obj )
 									skip = YES;
-								}
 							}
 
 							if ( skip )
@@ -182,7 +190,33 @@ static dispatch_queue_t pollQueue = nil;
 										DLog(@"Updating to iCloud completion");
 
 										[changes enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
-											[obj addObject:[newRecord objectForKey:key]];
+											// Add the new remote value and ensure the to, from, and theirs values are all deserialized if necessary.
+
+											NSObject *originalObj = [[NSUserDefaults standardUserDefaults] objectForKey: key];
+											id fromObj = [obj firstObject];
+											if ( nil != fromObj )
+											{
+												fromObj = [self deserialize:fromObj forKey:key similarTo:originalObj];
+												if ( nil == fromObj )
+												{
+													// Failed to deserialize.  Put our value in.
+													fromObj = originalObj;
+												}
+											}
+											id remoteObj = [newRecord objectForKey:key];
+											if ( nil != remoteObj )
+											{
+												remoteObj = [self deserialize:remoteObj forKey:key similarTo:originalObj];
+												if ( nil == remoteObj )
+												{
+													// Failed to deserialize.  Put our value in.
+													remoteObj = [obj lastObject];
+												}
+											}
+
+											obj[0] = fromObj;
+											obj[1] = originalObj;
+											[obj addObject:remoteObj];
 										}];
 
 										NSDictionary *corrections = [self sendNotificationsFor:MJSyncNotificationConflicts onKeys:changes];
@@ -190,7 +224,16 @@ static dispatch_queue_t pollQueue = nil;
 										if ( corrections && [corrections count] )
 										{
 											[corrections enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
-												newRecord[key] = obj;
+												Boolean skip = NO;
+												if ( nil != obj )
+												{
+													obj = [self serialize:obj forKey:key];
+													if ( nil == obj )
+														skip = YES;
+												}
+
+												if ( !skip )
+													newRecord[key] = obj;
 											}];
 											[corrections release];
 
@@ -211,7 +254,10 @@ static dispatch_queue_t pollQueue = nil;
 								}];
 							}
 							else
+							{
+								[self sendNotificationsFor:MJSyncNotificationSaveSuccess onKeys:changes];
 								[self completeUpdateToiCloudWithChanges:changes];
+							}
 						}];
 					}
 					else
@@ -240,8 +286,54 @@ static dispatch_queue_t pollQueue = nil;
 	}
 }
 
++(id) serialize:(id)obj forKey:(NSString*)key
+{
+	// Only serialize types that need to be.
+	if ( [obj isKindOfClass:[NSDictionary class]] )
+	{
+		NSError *error;
+		NSData *data = [NSPropertyListSerialization dataWithPropertyList:obj format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
+		if ( data )
+			obj = data;
+		else
+		{
+			DLog( @"Error serializing %@ to binary: %@", key, error );
+			obj = nil;
+		}
+	}
+	return obj;
+}
+
++(id) deserialize:(id)remoteObj forKey:(NSString*)key similarTo:(id)originalObj
+{
+	if ( [remoteObj isKindOfClass:[NSData class]]
+		&& !(originalObj && [originalObj isKindOfClass:[NSData class]]) )
+	{
+		NSError *error;
+		id deserialized = [NSPropertyListSerialization propertyListWithData:(NSData*)remoteObj options:NSPropertyListImmutable format:nil error:&error];
+		if ( deserialized )
+			remoteObj = deserialized;
+		else if ( originalObj )
+		{
+			DLog( @"Error deserializing %@ from binary: %@", key, error );
+			remoteObj = nil;
+		}
+		else
+		{
+			// Keep input remoteObj the same and return as output.
+			DLog( @"Error deserializing %@ from binary, but we didn't have a local copy so we assume it wasn't supposed to be deserialized.  We assume this is okay in order to handle storing NSData that doesn't represent a serialized property list. %@", key, error );
+		}
+	}
+	return remoteObj;
+}
+
 +(void) updateFromiCloud:(NSNotification*) notificationObject {
 	dispatch_async(syncQueue, ^{
+		if ( nil == privateDB )
+		{
+			DLog(@"Database has been unset.  Not updating from iCloud");
+			return;
+		}
 		DLog(@"Updating from iCloud");
 		dispatch_suspend(syncQueue);
 		[privateDB fetchRecordWithID:recordID completionHandler:^(CKRecord *record, NSError *error) {
@@ -257,6 +349,7 @@ static dispatch_queue_t pollQueue = nil;
 																name:NSUserDefaultsDidChangeNotification
 															  object:nil];
 
+				lastUpdateRecordChangeTagReceived = [[record recordChangeTag] retain];
 				DLog(@"Got record -%@-_-%@-_-%@-_-%@-",[[[record recordID] zoneID] zoneName],[[[record recordID] zoneID] ownerName],[[record recordID] recordName],[record recordChangeTag]);
 
 				__block int additions = 0, modifications = 0;
@@ -269,17 +362,11 @@ static dispatch_queue_t pollQueue = nil;
 						NSObject *obj = [[NSUserDefaults standardUserDefaults] objectForKey: key];
 						NSObject *originalObj = obj;
 
-						if ( [obj isKindOfClass:[NSDictionary class]] )
+						if ( nil != obj )
 						{
-							NSError *error;
-							NSData *data = [NSPropertyListSerialization dataWithPropertyList:obj format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
-							if ( data )
-								obj = data;
-							else
-							{
-								DLog( @"Error serializing %@ to binary: %@", key, error );
+							obj = [self serialize:obj forKey:key];
+							if ( nil == obj )
 								skip = YES;
-							}
 						}
 
 						if ( skip )
@@ -305,23 +392,14 @@ static dispatch_queue_t pollQueue = nil;
 						if ( !skip )
 						{
 							id remoteObj = [record objectForKey:key];
-							if ( [remoteObj isKindOfClass:[NSData class]]
-								&& !(originalObj && [originalObj isKindOfClass:[NSData class]]) )
+
+							if ( nil != remoteObj )
 							{
-								NSError *error;
-								id deserialized = [NSPropertyListSerialization propertyListWithData:(NSData*)remoteObj options:NSPropertyListImmutable format:nil error:&error];
-								if ( deserialized )
-									remoteObj = deserialized;
-								else if ( originalObj )
-								{
-									DLog( @"Error deserializing %@ from binary: %@", key, error );
+								remoteObj = [self deserialize:remoteObj forKey:key similarTo:originalObj];
+								if ( nil == remoteObj )
 									skip = YES;
-								}
-								else
-								{
-									DLog( @"Error deserializing %@ from binary, but we didn't have a local copy so we assume it wasn't supposed to be deserialized.  We assume this is okay in order to handle storing NSData that doesn't represent a serialized property list. %@", key, error );
-								}
 							}
+
 							if ( !skip )
 							{
 								[[NSUserDefaults standardUserDefaults] setObject:remoteObj forKey:key];
@@ -388,11 +466,11 @@ static dispatch_queue_t pollQueue = nil;
 }
 
 +(void) startWithKeyMatchList:(NSArray*) keyMatchList withContainerIdentifier:(NSString*) containerIdentifier {
-	NSLog(@"Starting with match list length %lu atop %lu", (unsigned long)[keyMatchList count], (unsigned long)[matchList count]);
+	DLog(@"Starting with match list length %lu atop %lu", (unsigned long)[keyMatchList count], (unsigned long)[matchList count]);
 
 	// If we are already running and add criteria while updating to iCloud, we could push to iCloud before pulling the existing value from iCloud.  Avoid this by dispatching into another thread that will wait pause existing activity and wait for it to stop before adding new criteria.
 	dispatch_async(dispatch_get_main_queue(), ^{
-		NSLog(@"Actually starting with match list length %lu atop %lu", (unsigned long)[keyMatchList count], (unsigned long)[matchList count]);
+		DLog(@"Actually starting with match list length %lu atop %lu", (unsigned long)[keyMatchList count], (unsigned long)[matchList count]);
 		[self commonStartInitialStepsOnContainerIdentifier:containerIdentifier];
 
 		if ( !matchList )
@@ -407,7 +485,7 @@ static dispatch_queue_t pollQueue = nil;
 		[matchList retain];
 		[toRelease release];
 
-		NSLog(@"Match list length is now %lu", (unsigned long)[matchList count]);
+		DLog(@"Match list length is now %lu", (unsigned long)[matchList count]);
 
 		[self attemptToEnable];
 	});
@@ -416,7 +494,7 @@ static dispatch_queue_t pollQueue = nil;
 +(void) commonStartInitialStepsOnContainerIdentifier:(NSString*) containerIdentifier {
 	[self pause];
 
-	NSLog(@"Waiting for sync queue to clear before adding new criteria.");
+	DLog(@"Waiting for sync queue to clear before adding new criteria.");
 	if ( !syncQueue )
 	{
 		syncQueue = dispatch_queue_create("com.MJCloudKitUserDefaultsSync.queue", DISPATCH_QUEUE_SERIAL);
@@ -424,7 +502,7 @@ static dispatch_queue_t pollQueue = nil;
 	}
 	dispatch_sync(syncQueue, ^{
 		refuseUpdateToICloudUntilAfterUpdateFromICloud = YES;
-		NSLog(@"Waited for sync queue to clear before adding new criteria.");
+		DLog(@"Waited for sync queue to clear before adding new criteria.");
 	});
 
 	if ( databaseContainerIdentifier )
@@ -443,7 +521,7 @@ static dispatch_queue_t pollQueue = nil;
 }
 
 +(void) stopForKeyMatchList:(NSArray*) keyMatchList {
-	NSLog(@"Stopping match list length %lu from %lu", (unsigned long)[keyMatchList count], (unsigned long)[matchList count]);
+	DLog(@"Stopping match list length %lu from %lu", (unsigned long)[keyMatchList count], (unsigned long)[matchList count]);
 
 	if ( !matchList )
 		return;
@@ -456,14 +534,14 @@ static dispatch_queue_t pollQueue = nil;
 
 	[toRelease release];
 
-	NSLog(@"Match list length is now %lu", (unsigned long)[matchList count]);
+	DLog(@"Match list length is now %lu", (unsigned long)[matchList count]);
 
 	if ( 0 == matchList.count )
 		[self stop];
 }
 
 +(void) stop {
-	NSLog(@"Stopping.");
+	DLog(@"Stopping.");
 	[self stopObservingActivity];
 	[self stopObservingIdentityChanges];
 	if ( matchList )
@@ -491,11 +569,11 @@ static dispatch_queue_t pollQueue = nil;
 			changeNotificationHandlers[type] = nil;
 		}
 	}
-	NSLog(@"Stopped.");
+	DLog(@"Stopped.");
 }
 
 +(void) addNotificationFor:(MJSyncNotificationType)type withSelector:(SEL)aSelector withTarget:(nullable id)aTarget {
-	NSLog(@"Registering change notification selector.");
+	DLog(@"Registering change notification selector.");
 	if ( !changeNotificationHandlers[type] )
 		changeNotificationHandlers[type] = [[NSMutableArray alloc] init];
 	[changeNotificationHandlers[type] addObject:aTarget];
@@ -503,26 +581,26 @@ static dispatch_queue_t pollQueue = nil;
 }
 
 +(void) removeNotificationsFor:(MJSyncNotificationType)type forTarget:(nullable id) aTarget {
-	NSLog(@"Removing change notification selector(s).");
+	DLog(@"Removing change notification selector(s).");
 	while ( changeNotificationHandlers[type] )
 	{
 		NSUInteger index = [changeNotificationHandlers[type] indexOfObjectIdenticalTo:aTarget];
 		if ( NSNotFound == index )
 			return;
-		NSLog(@"Removing a change notification selector.");
+		DLog(@"Removing a change notification selector.");
 		[changeNotificationHandlers[type] removeObjectAtIndex:index]; // Target
 		[changeNotificationHandlers[type] removeObjectAtIndex:index]; // Selector
 	}
 }
 
 +(NSDictionary*) sendNotificationsFor:(MJSyncNotificationType)type onKeys:(NSDictionary*) changes {
-	NSLog(@"Sending change notification selector(s).");
+	DLog(@"Sending change notification selector(s).");
 	__block NSMutableDictionary *corrections = nil;
 	if (changeNotificationHandlers[type])
 	{
 		for ( int i = 0 ; i < [changeNotificationHandlers[type] count] ; i+=2 )
 		{
-			NSLog(@"Sending a change notification selector.");
+			DLog(@"Sending a change notification selector.");
 			NSDictionary *currentCorrections = [changeNotificationHandlers[type][i] performSelector:[changeNotificationHandlers[type][i+1] pointerValue] withObject:changes];
 			if ( currentCorrections )
 			{
@@ -681,11 +759,15 @@ static dispatch_queue_t pollQueue = nil;
 
 		// Timers attach to the run loop of the process, which isn't present on all processes, so we must dispatch to the main queue to ensure we have a run loop for the timer.
 		dispatch_async(dispatch_get_main_queue(), ^{
-			pollCloudKitTimer = [[NSTimer scheduledTimerWithTimeInterval:(1.0)
-																  target:self
-																selector:@selector(pollCloudKit:)
-																userInfo:nil
-																 repeats:YES] retain];
+			NSDate *oneSecondFromNow = [NSDate dateWithTimeIntervalSinceNow:1.0];
+			pollCloudKitTimer = [[NSTimer alloc] initWithFireDate:oneSecondFromNow
+												   interval:(1.0)
+													 target:self
+												   selector:@selector(pollCloudKit:)
+												   userInfo:nil
+													repeats:YES];
+			// Assign it to NSRunLoopCommonModes so that it will still poll while the menu is open.  Using a simple NSTimer scheduledTimerWithTimeInterval: would result in polling that stops while the menu is active.  In the past this was okay but with Universal Clipboard a new clipping an arrive while the user has the menu open.
+			[[NSRunLoop currentRunLoop] addTimer:pollCloudKitTimer forMode:NSRunLoopCommonModes];
 		});
 	}
 	else
@@ -789,7 +871,8 @@ static dispatch_queue_t pollQueue = nil;
 	}
 }
 
-bool alreadyPolling = NO;
+static bool alreadyPolling = NO;
+static CFAbsoluteTime lastPollPokeTime;
 +(void)pollCloudKit:(NSTimer *)timer {
 	// The fetchRecordChangesCompletionBlock below doesn't get called until after the recordChangedBlock below completes.  The former block provides the change token which the poll uses to identify if changes have happened.  Prevent use of the old change token while processing changes, which would of course detect changes and cause excess evaluation, by setting / checking a flag in a serial queue until the completion block which occurs on a different queue causes it to be cleared in the original serial queue.
 	// This is preferable to using a dispatch_suspend / dispatch_resume because it prevents amassing a long queue of serial GCD operations in the event that the CloudKit CKFetchRecordChangesOperation takes more than the polling interval.
@@ -799,6 +882,7 @@ bool alreadyPolling = NO;
 		{
 			DLog(@"Polling");
 			alreadyPolling = YES;
+			lastPollPokeTime = CFAbsoluteTimeGetCurrent();
 
 			// CKFetchRecordChangesOperation is OS X 10.10 to 10.12, but CKQuerySubscription is 10.12+ so for code exclusive to our pre-CKQuerySubscription support we can use things that were deprecated when CKQuerySubscription was added.
 			// We will have to revisit this ^ since Push Notifications is only allowed if distributed through the App Store and CKQuerySubscription depends on Push Notifications.
@@ -830,13 +914,30 @@ bool alreadyPolling = NO;
 			};
 
 			[privateDB addOperation:operation];
-			[operation release];		}
+			[operation release];
+		}
+		else if ( CFAbsoluteTimeGetCurrent() - lastPollPokeTime > 600 )
+		{
+			// If it has been more than ten minutes without a poll response, send another one to try to wake up iCloud since it seems to be slow to realize when we come back online.
+			// Would be better if we didn't send this while offline.
+			lastPollPokeTime = CFAbsoluteTimeGetCurrent();
+
+			DLog(@"Poking");
+			CKFetchRecordChangesOperation *operation = [[CKFetchRecordChangesOperation alloc] initWithRecordZoneID:recordZone.zoneID previousServerChangeToken:previousChangeToken];
+
+			operation.recordChangedBlock = ^(CKRecord *record) { DLog(@"Poke got record change"); };
+
+			operation.fetchRecordChangesCompletionBlock = ^(CKServerChangeToken * _Nullable serverChangeToken, NSData * _Nullable clientChangeTokenData, NSError * _Nullable operationError) { DLog(@"Poke completion"); };
+
+			[privateDB addOperation:operation];
+			[operation release];
+		}
 	});
 }
 
 + (void) dealloc {
-	NSLog(@"Deallocating");
+	DLog(@"Deallocating");
 	[self stop];
-	NSLog(@"Deallocated");
+	DLog(@"Deallocated");
 }
 @end
