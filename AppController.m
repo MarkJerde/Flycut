@@ -420,10 +420,10 @@
 				[self updateMenu];
 			}
 		}
-
-		// Set the value.
-		[flycutOperator setRememberNum: newRemember];
 	}
+
+	// Set the value.
+	[flycutOperator setRememberNum: newRemember];
 }
 
 -(IBAction) setFavoritesRememberNumPref:(id)sender
