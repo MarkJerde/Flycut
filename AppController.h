@@ -66,7 +66,6 @@
     //Preferences
 	NSDictionary *standardPreferences;
     int jcDisplayNum;
-	BOOL issuedRememberResizeWarning;
 	BOOL needBezelUpdate;
 	BOOL needMenuUpdate;
 }
