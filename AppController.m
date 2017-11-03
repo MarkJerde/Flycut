@@ -1085,19 +1085,6 @@ didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
 		}
 	}
 
-	if ( [[NSUserDefaults standardUserDefaults] boolForKey:@"syncClippingsViaICloud"] ) {
-		NSAlert *alert = [[NSAlert alloc] init];
-		[alert setMessageText:@"Warning"];
-		[alert addButtonWithTitle:@"Ok"];
-		[alert addButtonWithTitle:@"Cancel"];
-		[alert setInformativeText:@"Enabling iCloud Clippings Sync will overwrite local clippings if your iCloud account already has Flycut clippings.  If you have never enabled this in Flycut on any computer, your current clippings will be retained and loaded into iCloud."];
-		if ( [alert runModal] != NSAlertFirstButtonReturn )
-		{
-			[[NSUserDefaults standardUserDefaults] setValue:[NSNumber numberWithBool:NO]
-													 forKey:@"syncClippingsViaICloud"];
-		}
-	}
-
 	[self registerOrDeregisterICloudSync];
 }
 
