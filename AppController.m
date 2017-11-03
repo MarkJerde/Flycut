@@ -612,6 +612,11 @@
 		[prefsPanel setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces];
 	[NSApp activateIgnoringOtherApps: YES];
 	[prefsPanel makeKeyAndOrderFront:self];
+	NSString *fileRoot = [[NSBundle mainBundle] pathForResource:@"acknowledgements" ofType:@"txt"];
+	NSString *contents = [NSString stringWithContentsOfFile:fileRoot
+												   encoding:NSUTF8StringEncoding
+													  error:NULL];
+	[acknowledgementsView setString:contents];
 	[flycutOperator willShowPreferences];
 }
 

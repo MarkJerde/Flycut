@@ -13,4 +13,10 @@ class SettingsViewController: IASKAppSettingsViewController {
 		super.init(style: .grouped)
 		super.showCreditsFooter = false
 	}
+
+	// - (id)initWithStyle:(UITableViewStyle)style {
+	required override init(style:UITableViewStyle) {
+		super.init(style: style)
+		super.showCreditsFooter = false
+	}
 }

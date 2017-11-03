@@ -27,6 +27,7 @@
 	SGHotKey					*mainHotKey;
 	IBOutlet SRRecorderControl	*mainRecorder;
 	IBOutlet NSPanel			*prefsPanel;
+	IBOutlet NSTextView			*acknowledgementsView;
 	IBOutlet NSBox			  *appearancePanel;
 	int							mainHotkeyModifiers;
 	SRKeyCodeTransformer        *srTransformer;
