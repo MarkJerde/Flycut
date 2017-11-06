@@ -54,7 +54,12 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 			let indexPath = self.tableView.indexPath(for: cell)
 			if ( nil != indexPath ) {
 				let url = URL(string: self.flycut.clippingString(withCount: Int32((indexPath?.row)!) )! )
-				UIApplication.shared.open(url!, options: [:], completionHandler: nil)
+				if #available(iOS 10.0, *) {
+					UIApplication.shared.open(url!, options: [:], completionHandler: nil)
+				} else {
+					// Fallback on earlier versions
+					UIApplication.shared.openURL(url!)
+				}
 				self.tableView.reloadRows(at: [indexPath!], with: UITableViewRowAnimation.none)
 			}
 
@@ -313,23 +318,25 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 		let item: MGSwipeTableCell = tableView.dequeueReusableCell(withIdentifier: "FlycutCell", for: indexPath) as! MGSwipeTableCell
 
 		item.textLabel?.text = flycut.previousDisplayStrings(indexPath.row + 1, containing: nil).last as! String?
-		let content = flycut.clippingString(withCount: Int32(indexPath.row) )
 
 		//configure left buttons
-		if URL(string: content!) != nil {
-			if (content?.lowercased().hasPrefix("http"))! {
-				if(!item.leftButtons.contains(openURLButton!))
-				{
-					item.leftButtons.append(openURLButton!)
-					item.leftSwipeSettings.transition = .border
-					item.leftExpansion.buttonIndex=0
+		var removeAll:Bool = true
+		if let content = flycut.clippingString(withCount: Int32(indexPath.row) )
+		{
+			if let url = URL(string: content)
+			{
+				if UIApplication.shared.canOpenURL( url ) {
+					if(!item.leftButtons.contains(openURLButton!))
+					{
+						item.leftButtons.append(openURLButton!)
+						item.leftSwipeSettings.transition = .border
+						item.leftExpansion.buttonIndex=0
+						removeAll = false
+					}
 				}
 			}
-			else {
-				item.leftButtons.removeAll()
-			}
 		}
-		else {
+		if ( removeAll ) {
 			item.leftButtons.removeAll()
 		}
 
