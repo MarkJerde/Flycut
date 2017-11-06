@@ -22,6 +22,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 	let alertHandlingSemaphore = DispatchSemaphore(value: 0)
 	let defaultsChangeHandlingQueue = DispatchQueue(label: "com.Flycut.defaultsChangeHandlingQueue")
 
+	let isURLDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
 	// Some buttons we will reuse.
 	var deleteButton:MGSwipeButton? = nil
@@ -323,15 +324,27 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 		var removeAll:Bool = true
 		if let content = flycut.clippingString(withCount: Int32(indexPath.row) )
 		{
-			if let url = URL(string: content)
+			// Detect if something is a URL before passing it to canOpenURL because on iOS 9 and later, if building with an earlier SDK,  there is a limit of 50 distinct URL schemes before canOpenURL will just return false.  This limit is theorized to prevent apps from detecting what other apps are installed.  The limit should be okay, assuming any user encounters fewer than 50 URL schemes, since those that the user actually uses will be allowed through before reaching the limit.  For building with an iOS 9 or later SDK a whitelist of schemes in the Info.plist will be used, but filtering before calling canOpenURL decreases the volume of log messages.
+
+			// NSTextCheckingResult.CheckingType.link.rawValue blocks things like single words that URL() would let in
+			// URL() blocks things like paragraphs of text containing a URL that NSTextCheckingResult.CheckingType.link.rawValue would let in
+
+			let matches = isURLDetector?.matches(in: content, options: .reportCompletion, range: NSMakeRange(0, content.characters.count))
+			if let matchesCount = matches?.count
 			{
-				if UIApplication.shared.canOpenURL( url ) {
-					if(!item.leftButtons.contains(openURLButton!))
+				if matchesCount > 0
+				{
+					if let url = URL(string: content)
 					{
-						item.leftButtons.append(openURLButton!)
-						item.leftSwipeSettings.transition = .border
-						item.leftExpansion.buttonIndex=0
-						removeAll = false
+						if UIApplication.shared.canOpenURL( url ) {
+							if(!item.leftButtons.contains(openURLButton!))
+							{
+								item.leftButtons.append(openURLButton!)
+								item.leftSwipeSettings.transition = .border
+								item.leftExpansion.buttonIndex=0
+								removeAll = false
+							}
+						}
 					}
 				}
 			}
